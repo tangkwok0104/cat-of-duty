@@ -9,10 +9,11 @@ export class SoundBus {
   private master: GainNode | null = null;
 
   constructor() {
-    bus.on('weapon:fired', () => this.shot());
+    bus.on('weapon:fired', ({ profile }) => this.shot(profile));
     bus.on('weapon:dry', () => this.click(1200, 0.04, 0.25));
     bus.on('weapon:reload-start', () => this.click(700, 0.05, 0.3));
     bus.on('weapon:reload-end', () => this.click(1000, 0.05, 0.35));
+    bus.on('weapon:switched', () => this.click(880, 0.04, 0.25));
     bus.on('enemy:hit', ({ killed, part }) => {
       if (killed) this.kill();
       else this.hit(part === 'head');
@@ -36,14 +37,19 @@ export class SoundBus {
     return this.ctx?.currentTime ?? 0;
   }
 
-  /** Rifle shot: white-noise crack through a falling lowpass + a thump. */
-  private shot(): void {
+  /** Gunshot: white-noise crack through a falling lowpass + a thump.
+   *  Per-gun flavour: shotgun = longer/deeper boom, sniper = sharper crack. */
+  private shot(profile: 'rifle' | 'shotgun' | 'sniper'): void {
     const ctx = this.ctx;
     const out = this.master;
     if (!ctx || !out) return;
     const t = this.now();
 
-    const noiseLen = 0.09;
+    const noiseLen = profile === 'shotgun' ? 0.16 : profile === 'sniper' ? 0.12 : 0.09;
+    const lpStart = profile === 'shotgun' ? 2600 : profile === 'sniper' ? 7000 : 5200;
+    const lpEnd = profile === 'shotgun' ? 220 : 500;
+    const thumpF = profile === 'shotgun' ? 95 : profile === 'sniper' ? 180 : 150;
+    const thumpVol = profile === 'rifle' ? 0.5 : 0.65;
     const buffer = ctx.createBuffer(1, ctx.sampleRate * noiseLen, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) {
@@ -53,8 +59,8 @@ export class SoundBus {
     noise.buffer = buffer;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(5200, t);
-    lp.frequency.exponentialRampToValueAtTime(500, t + noiseLen);
+    lp.frequency.setValueAtTime(lpStart, t);
+    lp.frequency.exponentialRampToValueAtTime(lpEnd, t + noiseLen);
     const ng = ctx.createGain();
     ng.gain.setValueAtTime(0.9, t);
     ng.gain.exponentialRampToValueAtTime(0.001, t + noiseLen);
@@ -63,10 +69,10 @@ export class SoundBus {
 
     const thump = ctx.createOscillator();
     thump.type = 'sine';
-    thump.frequency.setValueAtTime(150, t);
+    thump.frequency.setValueAtTime(thumpF, t);
     thump.frequency.exponentialRampToValueAtTime(48, t + 0.1);
     const tg = ctx.createGain();
-    tg.gain.setValueAtTime(0.5, t);
+    tg.gain.setValueAtTime(thumpVol, t);
     tg.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
     thump.connect(tg).connect(out);
     thump.start(t);

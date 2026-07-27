@@ -26,6 +26,9 @@ export class PlayerController {
     p.pitch -= _delta.dy * sens;
     if (p.pitch > PITCH_LIMIT) p.pitch = PITCH_LIMIT;
     if (p.pitch < -PITCH_LIMIT) p.pitch = -PITCH_LIMIT;
+    // Published for weapon sway — never used for camera rotation.
+    p.lookDeltaX = _delta.dx;
+    p.lookDeltaY = _delta.dy;
   }
 
   /** Fixed-step FSM → movement intent. Runs BEFORE PhysicsSystem.fixedStep. */

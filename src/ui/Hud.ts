@@ -14,6 +14,7 @@ export class Hud {
   private vignette = 0; // 0..1 eased out
   private lastAmmoText = '';
   private lastHpWidth = -1;
+  private scopedShown = false;
 
   constructor() {
     const root = document.getElementById('hud-root');
@@ -22,6 +23,13 @@ export class Hud {
     this.build();
 
     bus.on('enemy:hit', ({ killed }) => this.hitmarker(killed));
+    bus.on('weapon:switched', ({ slot, name }) => {
+      const el = this.els['weapon-name'];
+      if (el) el.textContent = name;
+      for (let i = 0; i < 3; i++) {
+        this.els[`pip-${i}`]?.classList.toggle('pip-active', i === slot);
+      }
+    });
     bus.on('player:damaged', () => {
       this.vignette = 1;
     });
@@ -65,7 +73,22 @@ export class Hud {
     health.append(bar);
     this.els['hp-fill'] = fill;
 
-    // Bottom-right: ammo.
+    // Bottom-right: weapon name + slot pips + ammo.
+    const weaponRow = make('hud-weapon', 'hud-weapon', this.root);
+    const wName = document.createElement('span');
+    wName.className = 'weapon-name';
+    const pips = document.createElement('span');
+    pips.className = 'weapon-pips';
+    for (let i = 0; i < 3; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'weapon-pip';
+      pip.textContent = String(i + 1);
+      pips.append(pip);
+      this.els[`pip-${i}`] = pip;
+    }
+    weaponRow.append(wName, pips);
+    this.els['weapon-name'] = wName;
+
     const ammo = make('hud-ammo', 'hud-ammo', this.root);
     const mag = document.createElement('span');
     mag.className = 'ammo-mag';
@@ -89,6 +112,16 @@ export class Hud {
 
     make('wave-toast', 'wave-toast', this.root);
     make('damage-vignette', 'damage-vignette', this.root);
+
+    // Sniper scope overlay: circular mask + reticle, shown when scoped.
+    const scope = make('scope-overlay', 'scope-overlay scope-hidden', this.root);
+    scope.innerHTML =
+      '<div class="scope-mask"></div>' +
+      '<svg class="scope-reticle" viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle cx="50" cy="50" r="31" fill="none" stroke="currentColor" stroke-width="0.5"/>' +
+      '<path d="M50 4 V44 M50 56 V96 M4 50 H44 M56 50 H96" stroke="currentColor" stroke-width="0.35"/>' +
+      '<path d="M50 40 V60 M40 50 H60" stroke="currentColor" stroke-width="0.8"/>' +
+      '</svg>';
 
     // Death screen.
     const death = make('death-screen', 'death-screen hidden-death', this.root);
@@ -136,6 +169,12 @@ export class Hud {
       cross.style.opacity = w.ads > 0.5 || state.health.dead ? '0' : '1';
     }
 
+    // Scope overlay follows the weapon's scoped flag.
+    if (w.scoped !== this.scopedShown) {
+      this.scopedShown = w.scoped;
+      this.els['scope-overlay']?.classList.toggle('scope-hidden', !w.scoped);
+    }
+
     // Damage vignette ease-out.
     if (this.vignette > 0) {
       this.vignette = Math.max(0, this.vignette - dt * 1.6);
@@ -148,17 +187,19 @@ export class Hud {
     if (now - this.lastRefresh < REFRESH_MS) return;
     this.lastRefresh = now;
 
-    const ammoText = String(w.ammo);
+    const slot = w.slots[w.slot];
+    const slotAmmo = slot?.ammo ?? 0;
+    const ammoText = String(slotAmmo);
     if (ammoText !== this.lastAmmoText) {
       this.lastAmmoText = ammoText;
       const mag = this.els['ammo-mag'];
       if (mag) {
         mag.textContent = ammoText;
-        mag.classList.toggle('ammo-low', w.ammo <= 5);
+        mag.classList.toggle('ammo-low', slotAmmo <= 5);
       }
     }
     const reserveEl = this.els['ammo-reserve'];
-    if (reserveEl) reserveEl.textContent = ` / ${w.reserve}`;
+    if (reserveEl) reserveEl.textContent = ` / ${slot?.reserve ?? 0}`;
     this.els['hud-reload']?.classList.toggle('reload-on', w.reloading);
 
     const hpW = Math.round(state.health.hp);

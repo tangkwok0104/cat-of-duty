@@ -15,11 +15,12 @@ export interface Events {
   /** Quality tier changed (user or adaptive). */
   'quality:changed': { tier: number; reason: 'manual' | 'adaptive' };
   /** A shot was fired (HUD spread, sound, viewmodel kick). */
-  'weapon:fired': { hit: boolean };
+  'weapon:fired': { hit: boolean; profile: 'rifle' | 'shotgun' | 'sniper' };
   /** Trigger pulled on an empty mag. */
   'weapon:dry': Record<string, never>;
   'weapon:reload-start': Record<string, never>;
   'weapon:reload-end': Record<string, never>;
+  'weapon:switched': { slot: number; name: string };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
   /** The player took damage. */

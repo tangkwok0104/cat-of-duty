@@ -70,11 +70,16 @@ async function boot(): Promise<void> {
   await physics.init(state);
   progress('physics');
 
+  // Pre-compile every material now — the first shot must not pay a
+  // shader-compile hitch mid-combat.
+  renderer.compile(renderSys.scene, renderSys.camera);
+
   const input = new Input(canvas);
   const player = new PlayerController(input);
   const cameraFeel = new CameraFeel();
   const health = new Health();
   const weapon = new WeaponSystem(input, physics, renderSys.camera, renderSys.scene);
+  weapon.arm(state);
   postfx.addBloomMeshes(weapon.bloomMeshes);
   const cats = new CatSystem(renderSys.scene);
   const hud = new Hud();
@@ -91,6 +96,9 @@ async function boot(): Promise<void> {
   });
   input.onKeyDown('KeyT', () => physics.resetCrates());
   input.onKeyDown('F1', () => tuningPanel.toggle());
+  input.onKeyDown('Digit1', () => weapon.requestSwitch(0, performance.now() / 1000));
+  input.onKeyDown('Digit2', () => weapon.requestSwitch(1, performance.now() / 1000));
+  input.onKeyDown('Digit3', () => weapon.requestSwitch(2, performance.now() / 1000));
   // R routes by context: dead = full restart, alive = reload.
   input.onKeyDown('KeyR', () => {
     if (state.health.dead) {

@@ -83,6 +83,7 @@ export class CatSystem {
         cat.flinch -= dt;
         continue; // staggered — no move, no attack
       }
+      if (state.debugFreezeCats) continue; // harness determinism
       const dx = px - cat.x;
       const dz = pz - cat.z;
       const dist = Math.hypot(dx, dz);

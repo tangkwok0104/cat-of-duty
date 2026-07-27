@@ -133,6 +133,42 @@
   to { opacity: 0.35; }
 }
 
+/* ---- Weapon row ---- */
+.hud-weapon {
+  position: absolute;
+  right: var(--s4);
+  bottom: calc(var(--s4) + var(--s6));
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.weapon-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--c-text);
+}
+
+.weapon-pips {
+  display: inline-flex;
+  gap: var(--s05);
+}
+
+.weapon-pip {
+  font-size: var(--fs-xs);
+  color: var(--c-subtle);
+  min-width: 14px;
+  text-align: center;
+}
+
+.weapon-pip.pip-active {
+  color: var(--c-accent);
+  font-weight: 700;
+}
+
 /* ---- Score ---- */
 .hud-score {
   position: absolute;
@@ -190,6 +226,38 @@
     rgba(255, 75, 58, 0.55) 100%
   );
   opacity: 0;
+}
+
+/* ---- Sniper scope ---- */
+.scope-overlay {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.scope-overlay.scope-hidden {
+  opacity: 0;
+}
+
+.scope-mask {
+  position: absolute;
+  inset: 0;
+  /* Circular window: everything outside the scope glass goes black. */
+  background: radial-gradient(
+    circle at center,
+    transparent 31vh,
+    rgba(4, 5, 3, 0.97) 33vh
+  );
+}
+
+.scope-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100vh;
+  height: 100vh;
+  transform: translate(-50%, -50%);
+  color: rgba(233, 230, 215, 0.85);
 }
 
 /* ---- Death screen ---- */

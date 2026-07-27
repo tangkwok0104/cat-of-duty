@@ -20,6 +20,8 @@ export interface CodApi {
   perfResult: PerfResult | null;
   /** Harness-only: let mousemove deltas through without real pointer lock. */
   forceInputCapture(on: boolean): void;
+  /** Harness-only: freeze cat AI so aimed shots test guns, not tracking. */
+  setCatsFrozen(on: boolean): void;
   getLatency(): { samples: number; p50: number; p95: number };
   getPerf(): {
     frameMs: number;
@@ -34,13 +36,14 @@ export interface CodApi {
   getGame(): {
     hp: number;
     dead: boolean;
+    slot: number;
     ammo: number;
     reserve: number;
     reloading: boolean;
     kills: number;
     wave: number;
     catsAlive: number;
-    cats: { id: number; x: number; y: number; z: number; phase: string }[];
+    cats: { id: number; x: number; y: number; z: number; hp: number; phase: string }[];
   };
 }
 
@@ -90,6 +93,9 @@ export function installDebugApi(
     forceInputCapture: (on) => {
       input.captureOverride = on;
     },
+    setCatsFrozen: (on) => {
+      state.debugFreezeCats = on;
+    },
     getLatency: () => input.latencyStats(),
     getPerf: () => ({
       frameMs: state.perf.frameMs,
@@ -110,13 +116,14 @@ export function installDebugApi(
     getGame: () => ({
       hp: state.health.hp,
       dead: state.health.dead,
-      ammo: state.weapon.ammo,
-      reserve: state.weapon.reserve,
+      slot: state.weapon.slot,
+      ammo: state.weapon.slots[state.weapon.slot]?.ammo ?? 0,
+      reserve: state.weapon.slots[state.weapon.slot]?.reserve ?? 0,
       reloading: state.weapon.reloading,
       kills: state.score.kills,
       wave: state.score.wave,
       catsAlive: state.score.catsAlive,
-      cats: state.cats.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, phase: c.phase })),
+      cats: state.cats.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, hp: c.hp, phase: c.phase })),
     }),
   };
   window.__cod = api;

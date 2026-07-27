@@ -57,6 +57,9 @@ export interface PlayerState {
   bobX: number;
   bobY: number;
   punchPitch: number;
+  /** Raw mouse delta consumed THIS frame (px) — weapon sway reads it. */
+  lookDeltaX: number;
+  lookDeltaY: number;
 }
 
 /** Desired movement, written by the player FSM each fixed step and consumed
@@ -121,19 +124,32 @@ export interface PerfState {
 
 export type QualityTier = 0 | 1 | 2 | 3 | 4;
 
-/** One weapon for the slice; becomes data-driven configs in M3. */
-export interface WeaponState {
+export interface AmmoSlot {
   ammo: number;
   reserve: number;
+}
+
+/** Three-gun loadout (M3); configs live in weapons/WeaponConfig.ts. */
+export interface WeaponState {
+  /** Active loadout slot (0 rifle / 1 shotgun / 2 sniper). */
+  slot: number;
+  slots: AmmoSlot[];
   reloading: boolean;
   reloadEndsAt: number;
+  /** Weapon-switch lower/raise progress: >0 means mid-switch. */
+  switchingUntil: number;
   /** ADS blend 0 (hip) → 1 (sights). */
   ads: number;
-  /** Additive camera pitch from recoil (spring-recovered). */
+  /** Additive camera recoil (spring-recovered — aim returns). */
   recoilPitch: number;
+  recoilYaw: number;
   /** Muzzle flash time-to-live in seconds (>0 = visible). */
   flashTtl: number;
   lastShotAt: number;
+  /** Active gun's ADS target FOV (render lerps toward it via `ads`). */
+  adsFov: number;
+  /** Fully scoped in (sniper at full ADS): hide viewmodel, show overlay. */
+  scoped: boolean;
 }
 
 export interface HealthState {
@@ -186,6 +202,9 @@ export interface GameState {
   /** Spawn/remove request queues (enemies → physics). */
   enemySpawnQueue: { id: number; x: number; z: number }[];
   enemyRemoveQueue: number[];
+  /** Harness-only: freeze cat movement so aimed-shot tests are
+   *  deterministic. Never set by game code. */
+  debugFreezeCats: boolean;
   player: PlayerState;
   playerIntent: PlayerIntent;
   /** One-shot teleport mailbox (debug/harness → physics). */
@@ -204,23 +223,24 @@ export interface GameState {
  *  pillar at (6,6) must not block the first thing the player ever sees). */
 export const PLAYER_SPAWN = { x: 2.5, y: 0.9, z: 9.5, yaw: 0.26 } as const;
 
-export const MAG_SIZE = 30;
-export const RESERVE_START = 90;
-
 export function createGameState(): GameState {
   return {
     ready: false,
     level: { staticColliders: [], dynamicBoxes: [] },
     crates: null,
     weapon: {
-      ammo: MAG_SIZE,
-      reserve: RESERVE_START,
+      slot: 0,
+      slots: [], // filled from configs by the WeaponSystem
       reloading: false,
       reloadEndsAt: 0,
+      switchingUntil: 0,
       ads: 0,
       recoilPitch: 0,
+      recoilYaw: 0,
       flashTtl: 0,
       lastShotAt: 0,
+      adsFov: 55,
+      scoped: false,
     },
     health: { hp: 100, dead: false, lastDamageAt: -Infinity },
     score: { kills: 0, wave: 0, catsAlive: 0 },
@@ -228,6 +248,7 @@ export function createGameState(): GameState {
     colliderToEnemy: new Map(),
     enemySpawnQueue: [],
     enemyRemoveQueue: [],
+    debugFreezeCats: false,
     player: {
       prevX: PLAYER_SPAWN.x, prevY: PLAYER_SPAWN.y, prevZ: PLAYER_SPAWN.z,
       currX: PLAYER_SPAWN.x, currY: PLAYER_SPAWN.y, currZ: PLAYER_SPAWN.z,
@@ -242,6 +263,8 @@ export function createGameState(): GameState {
       bobX: 0,
       bobY: 0,
       punchPitch: 0,
+      lookDeltaX: 0,
+      lookDeltaY: 0,
     },
     playerIntent: { wishX: 0, wishZ: 0, jump: false, crouch: false, sprint: false },
     playerTeleport: null,

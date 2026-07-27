@@ -187,7 +187,7 @@ export function buildGreyBoxRoom(
   const stripMat = new MeshStandardMaterial({
     color: 0x000000,
     emissive: 0xffb02e,
-    emissiveIntensity: 4.5,
+    emissiveIntensity: 3.2, // 4.5 nuked local exposure at close range
     roughness: 1,
   });
   const strips = new InstancedMesh(stripGeo, stripMat, 4);
