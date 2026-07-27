@@ -1,0 +1,40 @@
+{
+  "shots": [
+    {
+      "name": "01-wide",
+      "note": "corner overview — room scale, sun direction, sky",
+      "pos": [11.5, 3.4, 11.5],
+      "lookAt": [0, 0.6, 0],
+      "settleMs": 500
+    },
+    {
+      "name": "02-mid",
+      "note": "eye level toward cover cluster A and a pillar",
+      "pos": [4.5, 1.7, 5.5],
+      "lookAt": [-1.7, 1.0, -1.85],
+      "settleMs": 500
+    },
+    {
+      "name": "03-close",
+      "note": "close on crate stack (weapon stand-in until M3)",
+      "pos": [-0.35, 1.35, -0.4],
+      "lookAt": [-1.9, 0.8, -1.9],
+      "settleMs": 500
+    },
+    {
+      "name": "04-hud",
+      "note": "stats overlay against the scene (HUD-under-fire stand-in until M5)",
+      "pos": [2.5, 1.7, 7.0],
+      "lookAt": [0, 1.2, -3],
+      "settleMs": 500
+    },
+    {
+      "name": "05-menu",
+      "note": "boot screen (menu stand-in until M6)",
+      "boot": true,
+      "pos": [7.5, 1.7, 9.0],
+      "lookAt": [0, 1.0, 0],
+      "settleMs": 700
+    }
+  ]
+}

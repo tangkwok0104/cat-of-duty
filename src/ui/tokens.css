@@ -1,0 +1,51 @@
+/* ============================================================
+   CAT OF DUTY — design tokens (single source of truth for UI)
+   Brand: parody mil-spec. Olive-black field, bone text, tactical
+   amber accent, alert red. 8px spacing grid. No magic numbers in
+   component CSS — reference these tokens.
+   ============================================================ */
+:root {
+  /* Color */
+  --c-bg: #0b0d09;
+  --c-surface: #131610;
+  --c-surface-2: #1b1f16;
+  --c-text: #e9e6d7;
+  --c-muted: #8f947c;
+  --c-subtle: #4a4f3e;
+  --c-accent: #ffb02e; /* tactical amber */
+  --c-accent-dim: rgba(255, 176, 46, 0.15);
+  --c-danger: #ff4b3a;
+  --c-ok: #9ee493;
+
+  /* Spacing — 8px grid (s05 is the sanctioned half-step) */
+  --s05: 4px;
+  --s1: 8px;
+  --s2: 16px;
+  --s3: 24px;
+  --s4: 32px;
+  --s6: 48px;
+
+  /* Type scale (minor third) */
+  --font-hud: 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  --font-display: 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 16px;
+  --fs-lg: 19px;
+  --fs-xl: 23px;
+  --fs-2xl: 28px;
+  --fs-display: 40px;
+
+  /* Elevation / chrome */
+  --panel-bg: rgba(11, 13, 9, 0.55);
+  --panel-blur: 6px;
+  --panel-border: 1px solid rgba(255, 176, 46, 0.15);
+  --radius: 3px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap: cubic-bezier(0.6, 0.04, 0.3, 1);
+  --t-fast: 120ms;
+  --t-med: 260ms;
+  --t-slow: 600ms;
+}

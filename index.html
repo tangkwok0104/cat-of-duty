@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cat of Duty</title>
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <link rel="stylesheet" href="/src/ui/base.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+    <div id="hud-root"></div>
+    <div id="debug-root"></div>
+    <div id="boot-screen">
+      <div class="boot-card">
+        <svg class="boot-mark" viewBox="0 0 48 48" aria-hidden="true">
+          <path
+            d="M10 34 L10 16 L16 22 L24 12 L32 22 L38 16 L38 34 Z"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"
+          />
+          <circle cx="19" cy="27" r="1.8" fill="currentColor" />
+          <circle cx="29" cy="27" r="1.8" fill="currentColor" />
+        </svg>
+        <div class="boot-title">CAT OF DUTY</div>
+        <div class="boot-sub">TACTICAL FELINE OPERATIONS</div>
+        <div class="boot-bar"><div id="boot-bar-fill"></div></div>
+        <div id="boot-status">ESTABLISHING UPLINK…</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

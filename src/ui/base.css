@@ -1,0 +1,134 @@
+/* Base layout: fullscreen canvas + DOM overlay roots + boot screen. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-hud);
+}
+
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud-root,
+#debug-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- Boot screen (doubles as the pre-menu surface until M6) ---- */
+#boot-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(27, 31, 22, 0.9), rgba(11, 13, 9, 0.98) 70%),
+    var(--c-bg);
+  transition: opacity var(--t-slow) var(--ease-out);
+  z-index: 100;
+}
+
+#boot-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.boot-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s6);
+}
+
+.boot-mark {
+  width: var(--s6);
+  height: var(--s6);
+  color: var(--c-accent);
+}
+
+.boot-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--c-text);
+}
+
+.boot-sub {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.42em;
+  color: var(--c-muted);
+}
+
+.boot-bar {
+  width: 280px;
+  height: var(--s05);
+  margin-top: var(--s2);
+  background: var(--c-surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#boot-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: var(--c-accent);
+  transition: width var(--t-med) var(--ease-out);
+}
+
+#boot-status {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  color: var(--c-muted);
+}
+
+/* ---- Debug stats overlay ---- */
+.stats-panel {
+  position: absolute;
+  top: var(--s2);
+  left: var(--s2);
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: var(--s2);
+  row-gap: var(--s05);
+  padding: var(--s1) var(--s2);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+
+.stats-row {
+  display: contents;
+}
+
+.stats-label {
+  color: var(--c-muted);
+  letter-spacing: 0.1em;
+}
+
+.stats-value {
+  color: var(--c-accent);
+  text-align: right;
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,30 @@
+{
+  "name": "cat-of-duty",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit",
+    "capture": "tsx scripts/capture.ts",
+    "perf": "tsx scripts/perf.ts"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
+    "howler": "^2.2.4",
+    "n8ao": "^2.0.0",
+    "postprocessing": "^6.39.3",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/howler": "^2.2.13",
+    "@types/node": "^26.1.1",
+    "@types/three": "^0.185.1",
+    "playwright": "^1.62.0",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  }
+}
