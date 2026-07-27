@@ -1,9 +1,11 @@
 import {
   BoxGeometry,
+  DynamicDrawUsage,
   InstancedMesh,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  PointLight,
   Quaternion,
   Vector3,
   type Scene,
@@ -62,7 +64,9 @@ export function buildGreyBoxRoom(
   floor.receiveShadow = true;
   scene.add(floor);
   csmMaterials.push(floorMat);
-  state.level.staticColliders.push({ x: 0, y: -0.1, z: 0, hx: ROOM_HALF, hy: 0.1, hz: ROOM_HALF });
+  state.level.staticColliders.push({
+    x: 0, y: -0.1, z: 0, hx: ROOM_HALF, hy: 0.1, hz: ROOM_HALF, rotY: 0,
+  });
 
   // ---- Walls (4 instances of one box) ----
   // Tinted down: bare white plaster + direct sun pushes past 1.0 in HDR and
@@ -80,9 +84,13 @@ export function buildGreyBoxRoom(
     _q.setFromAxisAngle(new Vector3(0, 1, 0), w.rotY);
     _m.compose(_p.set(w.x, WALL_H / 2, w.z), _q, _s);
     walls.setMatrixAt(i, _m);
+    // Wall rotation is already encoded by swapping the half-extents, so the
+    // collider itself stays axis-aligned (rotY 0).
     const hx = w.rotY === 0 ? ROOM_HALF + WALL_T : WALL_T / 2;
     const hz = w.rotY === 0 ? WALL_T / 2 : ROOM_HALF + WALL_T;
-    state.level.staticColliders.push({ x: w.x, y: WALL_H / 2, z: w.z, hx, hy: WALL_H / 2, hz });
+    state.level.staticColliders.push({
+      x: w.x, y: WALL_H / 2, z: w.z, hx, hy: WALL_H / 2, hz, rotY: 0,
+    });
   });
   walls.castShadow = true;
   walls.receiveShadow = true;
@@ -102,7 +110,9 @@ export function buildGreyBoxRoom(
     _q.identity();
     _m.compose(_p.set(x, WALL_H / 2, z), _q, _s);
     pillars.setMatrixAt(i, _m);
-    state.level.staticColliders.push({ x, y: WALL_H / 2, z, hx: 0.35, hy: WALL_H / 2, hz: 0.35 });
+    state.level.staticColliders.push({
+      x, y: WALL_H / 2, z, hx: 0.35, hy: WALL_H / 2, hz: 0.35, rotY: 0,
+    });
   });
   pillars.castShadow = true;
   pillars.receiveShadow = true;
@@ -110,18 +120,22 @@ export function buildGreyBoxRoom(
 
   // ---- Static crate clusters (instanced) ----
   const crateMat = pbrMaterial(tex.crate);
+  crateMat.normalScale.set(1.35, 1.35); // planks must visibly groove in sun
   const crateGeo = new BoxGeometry(CRATE_HALF * 2, CRATE_HALF * 2, CRATE_HALF * 2);
+  // Stacked crates sit 4mm proud of the ones below — exactly-coplanar faces
+  // produce silhouette notches where rotated corners interpenetrate.
+  const STACK_LIFT = 0.004;
   const staticDefs: { x: number; y: number; z: number; rotY: number }[] = [
     // cover cluster A (stack of 3 + 1)
     { x: -2.2, y: CRATE_HALF, z: -1.8, rotY: 0.1 },
     { x: -1.25, y: CRATE_HALF, z: -1.95, rotY: -0.15 },
-    { x: -1.7, y: CRATE_HALF * 3, z: -1.85, rotY: 0.35 },
+    { x: -1.7, y: CRATE_HALF * 3 + STACK_LIFT, z: -1.85, rotY: 0.35 },
     { x: -2.3, y: CRATE_HALF, z: -0.85, rotY: 0.55 },
     // cover cluster B (L-shape)
     { x: 3.4, y: CRATE_HALF, z: 2.6, rotY: -0.2 },
     { x: 4.35, y: CRATE_HALF, z: 2.5, rotY: 0.08 },
     { x: 3.5, y: CRATE_HALF, z: 3.55, rotY: 0.3 },
-    { x: 3.45, y: CRATE_HALF * 3, z: 2.55, rotY: -0.4 },
+    { x: 3.45, y: CRATE_HALF * 3 + STACK_LIFT, z: 2.55, rotY: -0.4 },
     // scatter near pillars
     { x: -5.6, y: CRATE_HALF, z: 5.1, rotY: 0.7 },
     { x: 5.9, y: CRATE_HALF, z: -5.2, rotY: -0.6 },
@@ -134,7 +148,9 @@ export function buildGreyBoxRoom(
     _m.compose(_p.set(d.x, d.y, d.z), _q, _s);
     staticCrates.setMatrixAt(i, _m);
     state.level.staticColliders.push({
-      x: d.x, y: d.y, z: d.z, hx: CRATE_HALF, hy: CRATE_HALF, hz: CRATE_HALF,
+      x: d.x, y: d.y, z: d.z,
+      hx: CRATE_HALF, hy: CRATE_HALF, hz: CRATE_HALF,
+      rotY: d.rotY,
     });
   });
   staticCrates.castShadow = true;
@@ -157,6 +173,12 @@ export function buildGreyBoxRoom(
   const dynamicCrates = new InstancedMesh(crateGeo, crateMat, dynamicSpawns.length);
   dynamicCrates.castShadow = true;
   dynamicCrates.receiveShadow = true;
+  // Instance matrices are rewritten every frame, but three computes an
+  // InstancedMesh bounding sphere ONCE — a stale spawn-cluster sphere would
+  // frustum-cull the whole mesh (and its shadows) after the crates move.
+  // Six boxes in a small arena: culling buys nothing, disable it.
+  dynamicCrates.frustumCulled = false;
+  dynamicCrates.instanceMatrix.setUsage(DynamicDrawUsage);
   scene.add(dynamicCrates);
 
   // ---- Emissive accents (selective bloom targets) ----
@@ -170,25 +192,42 @@ export function buildGreyBoxRoom(
   });
   const strips = new InstancedMesh(stripGeo, stripMat, 4);
   pillarPos.forEach(([x, z], i) => {
-    // Offset toward room centre, on the pillar face.
-    const ox = x > 0 ? -0.38 : 0.38;
-    const oz = z > 0 ? -0.38 : 0.38;
-    _q.setFromAxisAngle(new Vector3(0, 1, 0), Math.abs(x) > Math.abs(z) ? Math.PI / 2 : 0);
-    _m.compose(_p.set(x + ox, 1.6, z + oz), _q, _s);
+    // Mount flush on the pillar face that looks toward the room centre
+    // along X: offset on ONE axis only (pillar half 0.35 + strip half
+    // thickness 0.02 = 0.37), and rotate the strip's thin axis to match.
+    const ox = x > 0 ? -0.37 : 0.37;
+    _q.setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
+    _m.compose(_p.set(x + ox, 1.6, z), _q, _s);
     strips.setMatrixAt(i, _m);
+    // Each strip spills warm light onto its pillar and the nearby floor —
+    // an emissive that illuminates nothing reads as a sticker, not a light.
+    const spill = new PointLight(0xffb02e, 4.5, 6, 2);
+    spill.position.set(x + ox * 2.2, 1.6, z);
+    scene.add(spill);
   });
   scene.add(strips);
   bloomMeshes.push(strips);
 
-  // Red objective panel on the north wall.
+  // Red signal panel on the north wall — framed in a dark bezel and flush
+  // to the wall so it reads as installed signage, not a floating glitch quad.
+  const wallInnerZ = -ROOM_HALF; // inner face of the north wall
+  const frameMat = new MeshStandardMaterial({
+    color: 0x17181c,
+    roughness: 0.55,
+    metalness: 0.6,
+  });
+  const frame = new Mesh(new BoxGeometry(1.34, 0.68, 0.06), frameMat);
+  frame.position.set(0, 2.1, wallInnerZ + 0.03);
+  frame.castShadow = true;
+  scene.add(frame);
   const panelMat = new MeshStandardMaterial({
     color: 0x000000,
     emissive: 0xff2210,
     emissiveIntensity: 3.0,
     roughness: 1,
   });
-  const panel = new Mesh(new BoxGeometry(1.2, 0.55, 0.05), panelMat);
-  panel.position.set(0, 2.1, -ROOM_HALF - WALL_T / 2 + 0.2);
+  const panel = new Mesh(new BoxGeometry(1.2, 0.55, 0.04), panelMat);
+  panel.position.set(0, 2.1, wallInnerZ + 0.055);
   scene.add(panel);
   bloomMeshes.push(panel);
 

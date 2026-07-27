@@ -29,10 +29,14 @@ export class Lighting {
       lightMargin: 30,
     });
     this.csm.fade = true;
+    // fade expands each cascade's shadow bounds — but the constructor fitted
+    // them with fade=false, so refit now or the fade band samples outside
+    // the shadow maps (visible brightened band at the cascade split).
+    this.csm.updateFrustums();
     for (const light of this.csm.lights) {
       light.shadow.bias = -0.0002;
       light.shadow.normalBias = 0.02;
-      light.color.setHex(0xfff2df); // warm late-afternoon sun
+      light.color.setHex(0xffe5c0); // warm sun, matched to the HDRI's golden sky
     }
 
     bus.on('level:built', ({ csmMaterials }) => {
@@ -53,6 +57,10 @@ export class Lighting {
   }
 
   setShadowMapSize(size: number): void {
+    // CSM's per-frame texel snapping divides by csm.shadowMapSize — if it
+    // disagrees with the real map size, shadow edges shimmer as the camera
+    // moves on every tier below ULTRA.
+    this.csm.shadowMapSize = size;
     for (const light of this.csm.lights) {
       light.shadow.mapSize.set(size, size);
       if (light.shadow.map) {

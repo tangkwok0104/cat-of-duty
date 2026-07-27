@@ -26,7 +26,7 @@ async function boot(): Promise<void> {
   let loaded = 0;
   const progress = (label: string): void => {
     loaded++;
-    bootBar.style.width = `${Math.min(100, (loaded / TOTAL_LOAD_UNITS) * 100)}%`;
+    bootBar.style.transform = `scaleX(${Math.min(1, loaded / TOTAL_LOAD_UNITS)})`;
     bootStatus.textContent = `LOADING ${label.toUpperCase()}`;
   };
 
@@ -55,11 +55,11 @@ async function boot(): Promise<void> {
 
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
-  const api = installDebugApi(state, renderSys, physics, quality, perfRun);
+  installDebugApi(state, renderSys, physics, quality, perfRun);
 
   const input = new Input();
   input.onKeyDown('KeyQ', () => {
-    const next = ((state.quality.tier + 1) % 4) as QualityTier;
+    const next = ((state.quality.tier + 1) % 5) as QualityTier;
     quality.setTier(next, false);
   });
   input.onKeyDown('KeyR', () => physics.resetCrates());
@@ -71,10 +71,20 @@ async function boot(): Promise<void> {
     stats.frame(frameMs);
     perfRun.afterRender(state, frameMs);
   });
+
+  // GPU context loss: stop cleanly and tell the player, instead of a frozen
+  // black canvas. (Full in-place restore is a later milestone.)
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    loop.stop();
+    bootScreen.classList.remove('hidden');
+    bootStatus.textContent = 'RENDERER SIGNAL LOST — RELOAD PAGE';
+    bootStatus.style.color = 'var(--c-danger)';
+  });
+
   loop.start();
 
-  state.ready = true;
-  api.ready = true;
+  state.ready = true; // window.__cod.ready reads this — single source of truth
   bootScreen.classList.add('hidden');
 }
 

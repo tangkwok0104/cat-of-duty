@@ -1,5 +1,4 @@
 import type { GameState } from '../core/GameState';
-import { bus } from '../core/EventBus';
 
 const SAMPLE_CAP = 240;
 const REFRESH_MS = 250;
@@ -56,11 +55,8 @@ export class StatsOverlay {
       this.fields[key] = valueEl;
     }
     root.append(panel);
-
-    bus.on('quality:changed', () => {
-      const el = this.fields['qual'];
-      if (el) el.textContent = this.tierName();
-    });
+    // No quality:changed listener needed — the QUAL field refreshes with
+    // every 250ms stats tick anyway.
   }
 
   frame(frameMs: number): void {

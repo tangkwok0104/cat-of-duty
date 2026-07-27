@@ -1,15 +1,14 @@
 import type { GameState, QualityTier } from '../core/GameState';
-import type { RenderSystem } from '../render/RenderSystem';
-import type { PhysicsSystem } from '../physics/PhysicsSystem';
-import type { QualityManager } from '../render/QualityManager';
+import type { CameraPoser, CrateResetter, QualityControl } from '../core/Capabilities';
 import type { PerfRun, PerfResult } from './PerfRun';
 import { heapMB } from './StatsOverlay';
 
 /** Automation surface for capture/perf scripts (and manual console poking).
- *  Everything the Playwright harness needs lives on window.__cod. */
+ *  Everything the Playwright harness needs lives on window.__cod. Depends
+ *  only on core capability interfaces — never on sibling system classes. */
 export interface CodApi {
   version: string;
-  ready: boolean;
+  readonly ready: boolean;
   setCamera(px: number, py: number, pz: number, tx: number, ty: number, tz: number): void;
   resetCrates(): void;
   setQuality(tier: QualityTier, auto: boolean): void;
@@ -33,19 +32,26 @@ declare global {
 
 export function installDebugApi(
   state: GameState,
-  renderSys: RenderSystem,
-  physics: PhysicsSystem,
-  quality: QualityManager,
+  camera: CameraPoser,
+  crates: CrateResetter,
+  quality: QualityControl,
   perfRun: PerfRun,
 ): CodApi {
   const api: CodApi = {
     version: '0.0.1',
-    ready: false,
-    setCamera: (px, py, pz, tx, ty, tz) => renderSys.setCameraPose(px, py, pz, tx, ty, tz),
-    resetCrates: () => physics.resetCrates(),
+    get ready() {
+      return state.ready; // single source of truth — no duplicate flag
+    },
+    setCamera: (px, py, pz, tx, ty, tz) => camera.setCameraPose(px, py, pz, tx, ty, tz),
+    resetCrates: () => crates.resetCrates(),
     setQuality: (tier, auto) => quality.setTier(tier, auto),
     showBoot: (show) => {
       document.getElementById('boot-screen')?.classList.toggle('hidden', !show);
+      // Re-showing the boot surface after load must not claim to be loading.
+      if (show && state.ready) {
+        const status = document.getElementById('boot-status');
+        if (status) status.textContent = 'SYSTEMS READY';
+      }
     },
     startPerfRun: (frames = 600) => perfRun.start(frames),
     get perfResult() {

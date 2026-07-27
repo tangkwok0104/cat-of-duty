@@ -13,8 +13,6 @@ export interface PbrMaps {
   aoMap: Texture;
 }
 
-export type ProgressFn = (loaded: number, total: number, label: string) => void;
-
 const TEX_ROOT = '/assets/textures';
 export const HDRI_URL = '/assets/hdri/kloppenheim_06_puresky_1k.hdr';
 

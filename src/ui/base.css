@@ -87,10 +87,13 @@ body {
 }
 
 #boot-bar-fill {
-  width: 0%;
+  /* Animate transform only (never width — layout properties are banned). */
+  width: 100%;
   height: 100%;
   background: var(--c-accent);
-  transition: width var(--t-med) var(--ease-out);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t-med) var(--ease-out);
 }
 
 #boot-status {

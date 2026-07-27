@@ -8,6 +8,8 @@ export interface StaticColliderSpec {
   hx: number;
   hy: number;
   hz: number;
+  /** Yaw in radians — colliders must match their visuals' rotation. */
+  rotY: number;
 }
 
 export interface DynamicBoxSpec {
@@ -42,7 +44,7 @@ export interface PerfState {
   heapMB: number;
 }
 
-export type QualityTier = 0 | 1 | 2 | 3;
+export type QualityTier = 0 | 1 | 2 | 3 | 4;
 
 export interface GameState {
   ready: boolean;

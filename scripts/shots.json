@@ -2,9 +2,9 @@
   "shots": [
     {
       "name": "01-wide",
-      "note": "corner overview — room scale, sun direction, sky",
-      "pos": [11.5, 3.4, 11.5],
-      "lookAt": [0, 0.6, 0],
+      "note": "grounded overview near player eye height — cover in foreground, pillar off-centre",
+      "pos": [9.5, 2.0, 10.5],
+      "lookAt": [-2.5, 1.0, -2.5],
       "settleMs": 500
     },
     {

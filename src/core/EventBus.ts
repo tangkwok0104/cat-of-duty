@@ -14,7 +14,6 @@ export interface Events {
   };
   /** Quality tier changed (user or adaptive). */
   'quality:changed': { tier: number; reason: 'manual' | 'adaptive' };
-  'resize': { width: number; height: number };
 }
 
 type Handler<K extends keyof Events> = (payload: Events[K]) => void;

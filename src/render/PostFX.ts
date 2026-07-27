@@ -51,13 +51,19 @@ export class PostFX {
     });
     this.bloom.ignoreBackground = true;
 
+    // Bloom lives in its OWN pass: EffectPass.update() runs every fused
+    // effect even when its blend is SKIP, so disabling bloom via blend mode
+    // would keep paying its full mip-chain GPU cost. A dedicated pass with
+    // .enabled=false is genuinely skipped by the composer — that's the whole
+    // point of the quality ladder's "bloom off" step.
+    this.bloomPass = new EffectPass(camera, this.bloom);
+    this.composer.addPass(this.bloomPass);
+
     const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     const vignette = new VignetteEffect({ offset: 0.3, darkness: 0.5 });
     const grain = new NoiseEffect({ blendFunction: BlendFunction.COLOR_DODGE, premultiply: true });
     grain.blendMode.opacity.value = 0.035;
-
-    this.bloomPass = new EffectPass(camera, this.bloom, toneMapping, vignette, grain);
-    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(new EffectPass(camera, toneMapping, vignette, grain));
 
     const smaa = new SMAAEffect({
       preset: SMAAPreset.HIGH,
@@ -75,7 +81,7 @@ export class PostFX {
   }
 
   setBloomEnabled(on: boolean): void {
-    this.bloom.blendMode.blendFunction = on ? BlendFunction.SCREEN : BlendFunction.SKIP;
+    this.bloomPass.enabled = on;
   }
 
   render(): void {

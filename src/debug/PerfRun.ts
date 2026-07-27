@@ -1,6 +1,5 @@
 import type { GameState } from '../core/GameState';
-import type { RenderSystem } from '../render/RenderSystem';
-import type { PhysicsSystem } from '../physics/PhysicsSystem';
+import type { CameraPoser, CrateResetter } from '../core/Capabilities';
 import { heapMB } from './StatsOverlay';
 
 export interface PerfResult {
@@ -33,13 +32,9 @@ export class PerfRun {
   result: PerfResult | null = null;
 
   constructor(
-    private readonly renderSys: RenderSystem,
-    private readonly physics: PhysicsSystem,
+    private readonly camera: CameraPoser,
+    private readonly crates: CrateResetter,
   ) {}
-
-  get running(): boolean {
-    return this.active;
-  }
 
   start(target = 600): void {
     this.target = target;
@@ -50,7 +45,7 @@ export class PerfRun {
     this.maxTris = 0;
     this.result = null;
     this.active = true;
-    this.physics.resetCrates();
+    this.crates.resetCrates();
   }
 
   /** Position the camera for this frame of the run (gameplay-like motion:
@@ -63,8 +58,8 @@ export class PerfRun {
     const px = Math.sin(angle) * radius;
     const pz = Math.cos(angle) * radius;
     const py = 1.7 + Math.sin(i * 0.11) * 0.06;
-    this.renderSys.setCameraPose(px, py, pz, Math.sin(angle + 0.9) * 2, 1.1, Math.cos(angle + 0.9) * 2);
-    if (i === Math.floor(this.target / 2)) this.physics.resetCrates();
+    this.camera.setCameraPose(px, py, pz, Math.sin(angle + 0.9) * 2, 1.1, Math.cos(angle + 0.9) * 2);
+    if (i === Math.floor(this.target / 2)) this.crates.resetCrates();
   }
 
   afterRender(state: GameState, frameMs: number): void {

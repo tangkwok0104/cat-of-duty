@@ -8,6 +8,7 @@ import {
   type InstancedMesh,
 } from 'three';
 import type { GameState } from '../core/GameState';
+import type { CameraPoser } from '../core/Capabilities';
 import { bus } from '../core/EventBus';
 import type { Lighting } from './Lighting';
 import type { PostFX } from './PostFX';
@@ -22,7 +23,7 @@ const ONE = new Vector3(1, 1, 1);
 
 /** Owns the scene + camera, applies interpolated physics transforms to the
  *  dynamic crate InstancedMesh, then runs CSM update and the post chain. */
-export class RenderSystem {
+export class RenderSystem implements CameraPoser {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
   private dynamicCrates: InstancedMesh | null = null;
@@ -51,7 +52,6 @@ export class RenderSystem {
       this.renderer.setSize(w, h);
       this.postfx?.onResize(w, h);
       this.lighting?.onResize();
-      bus.emit('resize', { width: w, height: h });
     });
   }
 
@@ -63,6 +63,9 @@ export class RenderSystem {
   render(alpha: number, state: GameState): void {
     this.renderer.info.reset();
     this.applyCrateTransforms(alpha, state);
+    // CSM fits cascades from camera.matrixWorld — refresh it first or the
+    // fit lags one frame behind camera motion (edge shadow pop on flicks).
+    this.camera.updateMatrixWorld();
     this.lighting?.update();
     this.postfx?.render();
     state.perf.drawCalls = this.renderer.info.render.calls;
