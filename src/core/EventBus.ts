@@ -23,8 +23,9 @@ export interface Events {
   'weapon:switched': { slot: number; name: string };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
-  /** The player took damage. */
-  'player:damaged': { amount: number };
+  /** The player took damage (fromX/fromZ = attacker position, for the
+   *  damage-direction indicator). */
+  'player:damaged': { amount: number; fromX: number; fromZ: number };
   'player:died': Record<string, never>;
   /** Full slice restart (R while dead) — every system resets itself. */
   'game:restart': Record<string, never>;

@@ -15,6 +15,13 @@ export class Hud {
   private lastAmmoText = '';
   private lastHpWidth = -1;
   private scopedShown = false;
+  private hpTrail = 100; // delayed damage trail (eases down after hits)
+  private weaponName = 'PAWS-15';
+  private lowHpShown = -1;
+  // Damage direction: attacker position + remaining display time.
+  private dmgFromX = 0;
+  private dmgFromZ = 0;
+  private dmgTtl = 0;
 
   constructor() {
     const root = document.getElementById('hud-root');
@@ -22,16 +29,23 @@ export class Hud {
     this.root = root;
     this.build();
 
-    bus.on('enemy:hit', ({ killed }) => this.hitmarker(killed));
+    bus.on('enemy:hit', ({ killed, part }) => {
+      this.hitmarker(killed, part === 'head');
+      if (killed) this.killfeed(part === 'head');
+    });
     bus.on('weapon:switched', ({ slot, name }) => {
+      this.weaponName = name;
       const el = this.els['weapon-name'];
       if (el) el.textContent = name;
       for (let i = 0; i < 3; i++) {
         this.els[`pip-${i}`]?.classList.toggle('pip-active', i === slot);
       }
     });
-    bus.on('player:damaged', () => {
+    bus.on('player:damaged', ({ fromX, fromZ }) => {
       this.vignette = 1;
+      this.dmgFromX = fromX;
+      this.dmgFromZ = fromZ;
+      this.dmgTtl = 1.2;
     });
     bus.on('player:died', () => this.setDead(true));
     bus.on('game:restart', () => this.setDead(false));
@@ -63,15 +77,41 @@ export class Hud {
       '<path d="M5 5 L10 10 M19 5 L14 10 M5 19 L10 14 M19 19 L14 14" ' +
       'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>';
 
-    // Bottom-left: health.
+    // Bottom-left: health (trail layer eases down behind the live fill).
     const health = make('hud-health', 'hud-health', this.root);
     const bar = document.createElement('div');
     bar.className = 'hp-bar';
+    const trail = document.createElement('div');
+    trail.className = 'hp-trail';
     const fill = document.createElement('div');
     fill.className = 'hp-fill';
-    bar.append(fill);
+    bar.append(trail, fill);
     health.append(bar);
     this.els['hp-fill'] = fill;
+    this.els['hp-trail'] = trail;
+
+    // Minimap: bottom-left above health; player arrow + hostile dots.
+    const minimap = make('minimap', 'minimap', this.root);
+    const arrow = document.createElement('div');
+    arrow.className = 'mm-player';
+    minimap.append(arrow);
+    this.els['mm-player'] = arrow;
+    for (let i = 0; i < 8; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'mm-cat';
+      minimap.append(dot);
+      this.els[`mm-cat-${i}`] = dot;
+    }
+
+    // Damage direction wedge (rotates around the crosshair).
+    const dmg = make('dmg-dir', 'dmg-dir', this.root);
+    dmg.innerHTML =
+      '<svg viewBox="0 0 40 40" aria-hidden="true">' +
+      '<path d="M20 2 L27 12 L13 12 Z" fill="currentColor"/></svg>';
+
+    // Low-health vignette (persistent while wounded) + killfeed column.
+    make('lowhp-vignette', 'lowhp-vignette', this.root);
+    make('killfeed', 'killfeed', this.root);
 
     // Bottom-right: weapon name + slot pips + ammo.
     const weaponRow = make('hud-weapon', 'hud-weapon', this.root);
@@ -130,13 +170,38 @@ export class Hud {
       '<div class="death-sub">PRESS R TO REDEPLOY</div>';
   }
 
-  private hitmarker(kill: boolean): void {
+  private hitmarker(kill: boolean, headshot: boolean): void {
     const m = this.els['hitmarker'];
     if (!m) return;
-    m.classList.remove('hm-play', 'hm-kill');
+    m.classList.remove('hm-play', 'hm-kill', 'hm-head');
     void m.offsetWidth; // restart the CSS animation
     if (kill) m.classList.add('hm-kill');
+    if (headshot) m.classList.add('hm-head'); // rotated X — reads instantly
     m.classList.add('hm-play');
+  }
+
+  private killfeed(headshot: boolean): void {
+    const feed = this.els['killfeed'];
+    if (!feed) return;
+    const entry = document.createElement('div');
+    entry.className = 'kf-entry';
+    const weapon = document.createElement('span');
+    weapon.className = 'kf-weapon';
+    weapon.textContent = this.weaponName;
+    const sep = document.createElement('span');
+    sep.className = 'kf-sep';
+    sep.textContent = headshot ? '⌖' : '▸';
+    if (headshot) sep.classList.add('kf-hs');
+    const victim = document.createElement('span');
+    victim.className = 'kf-victim';
+    victim.textContent = 'HOSTILE CAT';
+    entry.append(weapon, sep, victim);
+    feed.prepend(entry);
+    while (feed.children.length > 4) feed.lastChild?.remove();
+    setTimeout(() => {
+      entry.classList.add('kf-out');
+      setTimeout(() => entry.remove(), 400);
+    }, 3200);
   }
 
   private waveToast(wave: number): void {
@@ -184,8 +249,60 @@ export class Hud {
       );
     }
 
+    // Health trail: eases down toward the live bar after damage; snaps up
+    // on regen (a trail above the bar is meaningless).
+    const hp = state.health.hp;
+    if (this.hpTrail < hp) this.hpTrail = hp;
+    else if (this.hpTrail > hp) this.hpTrail += (hp - this.hpTrail) * Math.min(1, 2.5 * dt);
+    this.els['hp-trail']?.style.setProperty('transform', `scaleX(${this.hpTrail / 100})`);
+
+    // Damage direction: track the attacker while the indicator lives (it
+    // stays correct as the player turns).
+    const dmgEl = this.els['dmg-dir'];
+    if (dmgEl && this.dmgTtl > 0) {
+      this.dmgTtl -= dt;
+      const p = state.player;
+      const bearing = Math.atan2(-(this.dmgFromX - p.currX), -(this.dmgFromZ - p.currZ));
+      const rel = bearing - p.yaw;
+      dmgEl.style.setProperty(
+        'transform',
+        `translate(-50%, -50%) rotate(${(-rel * 180) / Math.PI}deg)`,
+      );
+      dmgEl.style.setProperty('opacity', String(Math.min(1, this.dmgTtl * 1.6)));
+    } else if (dmgEl && dmgEl.style.opacity !== '0') {
+      dmgEl.style.setProperty('opacity', '0');
+    }
+
+    // Minimap (throttled with the text refresh below).
+
     if (now - this.lastRefresh < REFRESH_MS) return;
     this.lastRefresh = now;
+
+    // Minimap: 27m arena → 148px square. Player arrow rotates with yaw.
+    const MM = 148 / 27;
+    const arrow = this.els['mm-player'];
+    if (arrow) {
+      const mx = (state.player.currX + 13.5) * MM;
+      const mz = (state.player.currZ + 13.5) * MM;
+      arrow.style.setProperty(
+        'transform',
+        `translate(${mx.toFixed(1)}px, ${mz.toFixed(1)}px) rotate(${((-state.player.yaw * 180) / Math.PI).toFixed(1)}deg)`,
+      );
+    }
+    for (let i = 0; i < 8; i++) {
+      const dot = this.els[`mm-cat-${i}`];
+      if (!dot) continue;
+      const cat = state.cats[i];
+      if (cat && cat.phase === 'alive') {
+        dot.style.setProperty('opacity', '1');
+        dot.style.setProperty(
+          'transform',
+          `translate(${((cat.x + 13.5) * MM).toFixed(1)}px, ${((cat.z + 13.5) * MM).toFixed(1)}px)`,
+        );
+      } else {
+        dot.style.setProperty('opacity', '0');
+      }
+    }
 
     const slot = w.slots[w.slot];
     const slotAmmo = slot?.ammo ?? 0;
@@ -196,6 +313,9 @@ export class Hud {
       if (mag) {
         mag.textContent = ammoText;
         mag.classList.toggle('ammo-low', slotAmmo <= 5);
+        mag.classList.remove('ammo-tick'); // pop on every change
+        void mag.offsetWidth;
+        mag.classList.add('ammo-tick');
       }
     }
     const reserveEl = this.els['ammo-reserve'];
@@ -207,6 +327,12 @@ export class Hud {
       this.lastHpWidth = hpW;
       this.els['hp-fill']?.style.setProperty('transform', `scaleX(${hpW / 100})`);
       this.els['hp-fill']?.classList.toggle('hp-low', hpW <= 30);
+    }
+    // Low-health vignette intensity steps (avoid style churn per frame).
+    const lowHp = state.health.dead ? 0 : Math.max(0, Math.round((1 - state.health.hp / 40) * 10));
+    if (lowHp !== this.lowHpShown) {
+      this.lowHpShown = lowHp;
+      this.els['lowhp-vignette']?.style.setProperty('opacity', String(lowHp * 0.075));
     }
 
     const kills = this.els['score-kills'];

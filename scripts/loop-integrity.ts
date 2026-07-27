@@ -41,6 +41,32 @@ async function main(): Promise<void> {
     steps.push([name, ok, detail]);
   };
 
+  /** Place the shooter `dist` metres from a live cat with VERIFIED clear
+   *  line of sight (real physics ray) — walks bearings around the cat until
+   *  one isn't blocked by pillars/crates/walls. Returns the cat id. */
+  const aimAtCat = (dist: number, aimY: number): Promise<number | null> =>
+    page.evaluate(
+      ([d, ay]) => {
+        const g = window.__cod.getGame();
+        const cat = g.cats.find((c) => c.phase === 'alive');
+        if (!cat) return null;
+        const OFFSETS = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, Math.PI / 2, -Math.PI / 2, Math.PI];
+        for (const off of OFFSETS) {
+          const ang = Math.atan2(-cat.x, -cat.z) + off;
+          const px = cat.x + Math.sin(ang) * d!;
+          const pz = cat.z + Math.cos(ang) * d!;
+          if (Math.abs(px) > 12 || Math.abs(pz) > 12) continue;
+          if (!window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ay!)) continue;
+          const yaw = Math.atan2(-(cat.x - px), -(cat.z - pz));
+          const pitch = Math.atan2(ay! - 1.62, d!);
+          window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
+          return cat.id;
+        }
+        return null;
+      },
+      [dist, aimY],
+    );
+
   // 1. Lock pointer (arms the waves).
   await page.mouse.click(960, 540);
   await page.waitForTimeout(250);
@@ -87,20 +113,8 @@ async function main(): Promise<void> {
     step('kill a cat', false, 'no live cat to shoot');
   } else {
     const killsBefore = g.kills;
-    // Stand 5m on the ARENA-CENTRE side of the cat (a fixed +z offset can
-    // put the shooter inside a wall), aim at its body centre (y≈0.44).
-    await page.evaluate(
-      ([cx, cz]) => {
-        const len = Math.hypot(cx!, cz!) || 1;
-        const px = cx! - (cx! / len) * 5;
-        const pz = cz! - (cz! / len) * 5;
-        const dy = 0.44 - 1.62; // body centre vs eye height
-        const yaw = Math.atan2(-(cx! - px), -(cz! - pz));
-        const pitch = Math.atan2(dy, 5);
-        window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
-      },
-      [target.x, target.z],
-    );
+    const aimed = await aimAtCat(5, 0.44); // torso, LoS-verified spot
+    step('LoS-verified firing position found', aimed !== null, `catId=${aimed}`);
     await page.waitForTimeout(200);
     await page.mouse.down();
     // 100 dmg body needs 3 shots @34; hold long enough for a mag-third.
@@ -187,17 +201,7 @@ async function main(): Promise<void> {
     step('shotgun close-range one-pull kill', false, 'no live cat');
   } else {
     const kills0 = g.kills;
-    await page.evaluate(
-      ([cx, cz]) => {
-        const len = Math.hypot(cx!, cz!) || 1;
-        const px = cx! - (cx! / len) * 2.2; // centre side — never in a wall
-        const pz = cz! - (cz! / len) * 2.2;
-        const yaw = Math.atan2(-(cx! - px), -(cz! - pz));
-        const pitch = Math.atan2(0.44 - 1.62, 2.2); // torso centre from eye height
-        window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
-      },
-      [target.x, target.z],
-    );
+    await aimAtCat(2.2, 0.44);
     await page.waitForTimeout(200);
     await page.mouse.down();
     await page.waitForTimeout(120);
@@ -223,19 +227,7 @@ async function main(): Promise<void> {
     step('sniper ADS headshot one-shot', false, 'no live cat');
   } else {
     const kills0 = g.kills;
-    await page.evaluate(
-      ([cx, cz]) => {
-        const len = Math.hypot(cx!, cz!) || 1;
-        const px = cx! - (cx! / len) * 7; // centre side — never in a wall
-        const pz = cz! - (cz! / len) * 7;
-        // Head ball sits at y≈0.95; eye at 0.9+0.72.
-        const dy = 0.95 - 1.62;
-        const yaw = Math.atan2(-(cx! - px), -(cz! - pz));
-        const pitch = Math.atan2(dy, 7);
-        window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
-      },
-      [target.x, target.z],
-    );
+    await aimAtCat(7, 0.95); // head ball, LoS-verified spot
     await page.waitForTimeout(150);
     await page.mouse.down({ button: 'right' }); // ADS
     await page.waitForTimeout(350);
@@ -246,7 +238,7 @@ async function main(): Promise<void> {
     await page.waitForTimeout(200);
     g = await game();
     step('sniper ADS headshot one-shot', sniperArmed && g.kills > kills0,
-      `armed=${sniperArmed} kills ${kills0}→${g.kills}`);
+      `armed=${sniperArmed} kills ${kills0}→${g.kills} ammo=${g.ammo} target=(${target.x.toFixed(1)},${target.z.toFixed(1)})`);
   }
   await page.evaluate(() => window.__cod.setCatsFrozen(false));
 

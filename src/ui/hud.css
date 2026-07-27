@@ -50,6 +50,11 @@
   color: var(--c-danger);
 }
 
+.hitmarker.hm-head svg {
+  /* Headshot: the X snaps 45° into a plus — instantly distinguishable. */
+  transform: rotate(45deg);
+}
+
 .hitmarker.hm-play {
   animation: hm-pop 240ms var(--ease-snap);
 }
@@ -76,9 +81,13 @@
   overflow: hidden;
 }
 
+.hp-bar {
+  position: relative;
+}
+
 .hp-fill {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   background: var(--c-ok);
   transform-origin: left;
   transition: transform var(--t-med) var(--ease-out);
@@ -86,6 +95,14 @@
 
 .hp-fill.hp-low {
   background: var(--c-danger);
+}
+
+/* Delayed damage trail: pale layer that lags behind the live bar. */
+.hp-trail {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 176, 46, 0.55);
+  transform-origin: left;
 }
 
 /* ---- Ammo ---- */
@@ -105,6 +122,15 @@
 
 .ammo-mag.ammo-low {
   color: var(--c-danger);
+}
+
+.ammo-mag.ammo-tick {
+  animation: ammo-pop 140ms var(--ease-snap);
+}
+
+@keyframes ammo-pop {
+  0% { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }
 
 .ammo-reserve {
@@ -214,6 +240,129 @@
   15% { opacity: 1; transform: translateX(-50%) translateY(0); }
   75% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* ---- Minimap ---- */
+.minimap {
+  position: absolute;
+  left: var(--s4);
+  bottom: calc(var(--s4) + var(--s4));
+  width: 148px;
+  height: 148px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mm-player {
+  position: absolute;
+  left: -5px;
+  top: -6px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--c-accent);
+  will-change: transform;
+}
+
+.mm-cat {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  opacity: 0;
+  will-change: transform;
+}
+
+/* ---- Damage direction wedge ---- */
+.dmg-dir {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 180px;
+  height: 180px;
+  transform: translate(-50%, -50%);
+  color: var(--c-danger);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dmg-dir svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Killfeed ---- */
+.killfeed {
+  position: absolute;
+  right: var(--s4);
+  top: calc(var(--s4) + var(--s6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s05);
+  align-items: flex-end;
+}
+
+.kf-entry {
+  display: flex;
+  gap: var(--s1);
+  align-items: baseline;
+  padding: var(--s05) var(--s1);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  animation: kf-in 220ms var(--ease-out);
+  transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out);
+}
+
+.kf-entry.kf-out {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+@keyframes kf-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.kf-weapon {
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+.kf-sep {
+  color: var(--c-muted);
+}
+
+.kf-sep.kf-hs {
+  color: var(--c-accent);
+  font-weight: 700;
+}
+
+.kf-victim {
+  color: var(--c-muted);
+}
+
+/* ---- Low-health vignette (persistent while wounded) ---- */
+.lowhp-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 46%,
+    rgba(255, 75, 58, 0.5) 100%
+  );
+  opacity: 0;
+  transition: opacity 300ms var(--ease-out);
 }
 
 /* ---- Damage vignette ---- */

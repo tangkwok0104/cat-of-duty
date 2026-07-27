@@ -88,7 +88,7 @@ async function boot(): Promise<void> {
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
   const tuningPanel = new TuningPanel(state);
-  installDebugApi(state, renderSys, physics, quality, perfRun, input);
+  installDebugApi(state, renderSys, physics, quality, perfRun, input, physics);
 
   input.onKeyDown('KeyQ', () => {
     const next = ((state.quality.tier + 1) % 5) as QualityTier;
@@ -139,6 +139,7 @@ async function boot(): Promise<void> {
     renderSys.render(alpha, state);
     input.completeFrame(performance.now()); // closes input→render latency
     hud.frame(state, dt, now);
+    sound.tick(state.health.hp / 100, state.health.dead);
     // First lock-in arms the first wave (also under the harness override).
     if (!wavesArmed && (input.locked || input.captureOverride)) {
       wavesArmed = true;

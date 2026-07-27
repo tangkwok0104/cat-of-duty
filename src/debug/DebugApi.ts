@@ -1,5 +1,11 @@
 import type { GameState, QualityTier } from '../core/GameState';
-import type { CameraPoser, CrateResetter, QualityControl } from '../core/Capabilities';
+import type {
+  CameraPoser,
+  CrateResetter,
+  QualityControl,
+  HitscanCaster,
+  BulletHit,
+} from '../core/Capabilities';
 import type { Input } from '../core/Input';
 import type { PerfRun, PerfResult } from './PerfRun';
 import { heapMB } from './StatsOverlay';
@@ -22,6 +28,9 @@ export interface CodApi {
   forceInputCapture(on: boolean): void;
   /** Harness-only: freeze cat AI so aimed shots test guns, not tracking. */
   setCatsFrozen(on: boolean): void;
+  /** Harness-only: would a bullet from (x,y,z) hit this cat first?
+   *  Uses the real physics ray — walls/crates/pillars all count. */
+  lineOfSightToCat(x: number, y: number, z: number, catId: number, aimY: number): boolean;
   getLatency(): { samples: number; p50: number; p95: number };
   getPerf(): {
     frameMs: number;
@@ -53,6 +62,8 @@ declare global {
   }
 }
 
+const _losHit: BulletHit = { hit: false, collider: -1, px: 0, py: 0, pz: 0, nx: 0, ny: 0, nz: 0 };
+
 export function installDebugApi(
   state: GameState,
   camera: CameraPoser,
@@ -60,6 +71,7 @@ export function installDebugApi(
   quality: QualityControl,
   perfRun: PerfRun,
   input: Input,
+  caster: HitscanCaster,
 ): CodApi {
   const api: CodApi = {
     version: '0.1.0',
@@ -95,6 +107,18 @@ export function installDebugApi(
     },
     setCatsFrozen: (on) => {
       state.debugFreezeCats = on;
+    },
+    lineOfSightToCat: (x, y, z, catId, aimY) => {
+      const cat = state.cats.find((c) => c.id === catId && c.phase === 'alive');
+      if (!cat) return false;
+      const dx = cat.x - x;
+      const dy = aimY - y;
+      const dz = cat.z - z;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      caster.castBullet(x, y, z, dx / len, dy / len, dz / len, 200, _losHit);
+      if (!_losHit.hit) return false;
+      const enemy = state.colliderToEnemy.get(_losHit.collider);
+      return enemy?.id === catId;
     },
     getLatency: () => input.latencyStats(),
     getPerf: () => ({

@@ -22,6 +22,19 @@ export class SoundBus {
     bus.on('player:died', () => this.death());
   }
 
+  private nextBeatAt = 0;
+
+  /** Per-frame: heartbeat when wounded — cadence rises as hp falls. */
+  tick(hpFraction: number, dead: boolean): void {
+    if (dead || hpFraction >= 0.4 || !this.ctx) return;
+    const now = this.now();
+    if (now < this.nextBeatAt) return;
+    // lub-dub
+    this.tone(64, 0.1, 0.5, 'sine', 40);
+    setTimeout(() => this.tone(52, 0.09, 0.4, 'sine', 36), 160);
+    this.nextBeatAt = now + 0.5 + hpFraction * 1.5;
+  }
+
   /** Call from a user gesture (pointer-lock click). */
   unlock(): void {
     if (!this.ctx) {

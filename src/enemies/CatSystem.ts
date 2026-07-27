@@ -112,7 +112,7 @@ export class CatSystem {
         cat.z = Math.max(-12.3, Math.min(12.3, cat.z));
       } else if (cat.attackCooldown <= 0 && !state.health.dead) {
         cat.attackCooldown = ATTACK_COOLDOWN;
-        bus.emit('player:damaged', { amount: ATTACK_DAMAGE });
+        bus.emit('player:damaged', { amount: ATTACK_DAMAGE, fromX: cat.x, fromZ: cat.z });
       }
     }
 
