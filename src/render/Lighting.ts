@@ -25,7 +25,7 @@ export class Lighting {
       mode: 'practical',
       shadowMapSize: 2048,
       lightDirection: new Vector3(-0.45, -0.7, -0.3).normalize(),
-      lightIntensity: 2.6,
+      lightIntensity: 2.0,
       lightMargin: 30,
     });
     this.csm.fade = true;
@@ -45,7 +45,7 @@ export class Lighting {
     const pmrem = new PMREMGenerator(renderer);
     const envRT = pmrem.fromEquirectangular(hdri);
     scene.environment = envRT.texture;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = 0.42;
     hdri.mapping = EquirectangularReflectionMapping;
     scene.background = hdri;
     scene.backgroundIntensity = 1.0;

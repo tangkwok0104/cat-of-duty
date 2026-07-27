@@ -42,7 +42,7 @@ async function boot(): Promise<void> {
   const [hdri, floor, wall, crate] = await Promise.all([
     loadHdri(progress),
     loadPbrSet('concrete_floor_worn_001', 5, 5, progress),
-    loadPbrSet('plastered_wall', 7, 1.4, progress),
+    loadPbrSet('plastered_wall', 11, 1.6, progress),
     loadPbrSet('worn_planks', 1, 1, progress),
   ]);
   lighting.applyEnvironment(renderer, renderSys.scene, hdri);

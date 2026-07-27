@@ -16,6 +16,10 @@ export class PhysicsSystem {
 
   async init(state: GameState): Promise<void> {
     const RAPIER = await import('@dimforge/rapier3d-compat');
+    // Known console warning: "using deprecated parameters for the
+    // initialization function" comes from INSIDE rapier3d-compat 0.19.3
+    // (its own wasm-bindgen init call) — upstream issue, not ours to fix;
+    // its public init() takes no arguments.
     await RAPIER.init();
     this.world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
     this.world.timestep = FIXED_DT;

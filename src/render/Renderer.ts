@@ -2,7 +2,7 @@ import {
   WebGLRenderer,
   SRGBColorSpace,
   NoToneMapping,
-  PCFSoftShadowMap,
+  PCFShadowMap,
 } from 'three';
 
 /** Base pixel ratio: honour HiDPI up to 1.5 — beyond that the fill-rate cost
@@ -26,7 +26,10 @@ export function createRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
   renderer.toneMapping = NoToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  // Spec asks for PCFSoftShadowMap; three r185 deprecated it and silently
+  // falls back to PCFShadowMap, so we set the fallback explicitly to keep
+  // the console clean. Softness comes from CSM cascade density + bias tuning.
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.setPixelRatio(basePixelRatio());
   renderer.setSize(window.innerWidth, window.innerHeight);
   // We count draw calls across ALL passes (shadow, AO prepass, main, post),

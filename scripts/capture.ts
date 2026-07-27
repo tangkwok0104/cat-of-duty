@@ -28,7 +28,12 @@ async function main(): Promise<void> {
   ) as { shots: Shot[] };
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true });
+  // ANGLE-on-Metal gives headless Chromium the real GPU on macOS; without it
+  // we get a software rasterizer and every visual/perf observation is noise.
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--use-angle=metal'],
+  });
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
@@ -52,7 +57,10 @@ async function main(): Promise<void> {
     timeout: 60_000,
   });
   console.log('[capture] game ready');
-  await page.waitForTimeout(1500); // let physics settle + shaders warm
+  // Screenshots are taken at a LOCKED max quality tier — the adaptive
+  // stepper must not change settings between shots.
+  await page.evaluate(() => window.__cod.setQuality(0, false));
+  await page.waitForTimeout(4000); // crates settle + shaders warm
 
   for (const shot of shots) {
     await page.evaluate(

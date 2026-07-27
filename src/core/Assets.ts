@@ -4,7 +4,7 @@ import {
   SRGBColorSpace,
   type Texture,
 } from 'three';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 export interface PbrMaps {
   map: Texture;
@@ -22,7 +22,7 @@ export const HDRI_URL = '/assets/hdri/kloppenheim_06_puresky_1k.hdr';
 export const TOTAL_LOAD_UNITS = 14;
 
 const texLoader = new TextureLoader();
-const rgbeLoader = new RGBELoader();
+const hdrLoader = new HDRLoader();
 
 async function loadTex(
   url: string,
@@ -69,7 +69,7 @@ export async function loadPbrSet(
 }
 
 export async function loadHdri(onProgress: (label: string) => void): Promise<Texture> {
-  const tex = await rgbeLoader.loadAsync(HDRI_URL);
+  const tex = await hdrLoader.loadAsync(HDRI_URL);
   onProgress('hdri');
   return tex;
 }

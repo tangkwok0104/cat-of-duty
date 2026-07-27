@@ -34,7 +34,11 @@ interface PerfResult {
 }
 
 async function main(): Promise<void> {
-  const browser = await chromium.launch({ headless: true });
+  // Real GPU via ANGLE Metal — software-rendered numbers are not perf data.
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--use-angle=metal'],
+  });
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
@@ -50,6 +54,9 @@ async function main(): Promise<void> {
   await page.waitForFunction(() => window.__cod?.ready === true, undefined, {
     timeout: 60_000,
   });
+  // Perf runs at the LOCKED max tier — adaptive stepping mid-run would make
+  // the numbers incomparable between runs.
+  await page.evaluate(() => window.__cod.setQuality(0, false));
   await page.waitForTimeout(2000); // shader compile + JIT warmup outside the run
 
   console.log(`[perf] running ${FRAMES} frames …`);

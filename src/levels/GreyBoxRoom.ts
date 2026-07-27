@@ -29,13 +29,14 @@ const _q = new Quaternion();
 const _p = new Vector3();
 const _s = new Vector3(1, 1, 1);
 
-function pbrMaterial(maps: PbrMaps, roughnessBias = 0): MeshStandardMaterial {
+function pbrMaterial(maps: PbrMaps, tint = 0xffffff): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({
+    color: tint,
     map: maps.map,
     normalMap: maps.normalMap,
     roughnessMap: maps.roughnessMap,
     aoMap: maps.aoMap,
-    roughness: 1 - roughnessBias,
+    roughness: 1,
     metalness: 0.0,
   });
   mat.aoMapIntensity = 1.0;
@@ -64,7 +65,9 @@ export function buildGreyBoxRoom(
   state.level.staticColliders.push({ x: 0, y: -0.1, z: 0, hx: ROOM_HALF, hy: 0.1, hz: ROOM_HALF });
 
   // ---- Walls (4 instances of one box) ----
-  const wallMat = pbrMaterial(tex.wall);
+  // Tinted down: bare white plaster + direct sun pushes past 1.0 in HDR and
+  // ACES flattens it to a blank card — the tint keeps albedo texture legible.
+  const wallMat = pbrMaterial(tex.wall, 0xcfccc2);
   const wallGeo = new BoxGeometry(ROOM_HALF * 2 + WALL_T * 2, WALL_H, WALL_T);
   const walls = new InstancedMesh(wallGeo, wallMat, 4);
   const wallDefs: { x: number; z: number; rotY: number }[] = [
