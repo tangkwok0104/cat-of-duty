@@ -37,6 +37,8 @@ export class RenderSystem implements CameraPoser {
       0.08,
       300,
     );
+    // YXZ: yaw around world-up first, then pitch — standard FPS camera.
+    this.camera.rotation.order = 'YXZ';
     this.camera.position.set(7.5, 1.7, 9.0);
     this.camera.lookAt(0, 1.0, 0);
 
@@ -63,6 +65,7 @@ export class RenderSystem implements CameraPoser {
   render(alpha: number, state: GameState): void {
     this.renderer.info.reset();
     this.applyCrateTransforms(alpha, state);
+    this.poseCamera(alpha, state);
     // CSM fits cascades from camera.matrixWorld — refresh it first or the
     // fit lags one frame behind camera motion (edge shadow pop on flicks).
     this.camera.updateMatrixWorld();
@@ -109,7 +112,33 @@ export class RenderSystem implements CameraPoser {
     mesh.instanceMatrix.needsUpdate = true;
   }
 
-  /** Debug/capture hook: place the camera and aim it. */
+  /** Camera from player state: position interpolates between physics steps;
+   *  rotation is the RAW yaw/pitch — same frame as the mouse, no smoothing.
+   *  Bob/punch are additive view offsets and never touch the look angles. */
+  private poseCamera(alpha: number, state: GameState): void {
+    if (state.cameraMode !== 'player') return; // debug camera: posed externally
+    const p = state.player;
+    const t = state.tuning;
+    const px = p.prevX + (p.currX - p.prevX) * alpha;
+    const py = p.prevY + (p.currY - p.prevY) * alpha;
+    const pz = p.prevZ + (p.currZ - p.prevZ) * alpha;
+    // Lateral bob rides the camera's right axis: right = (cos yaw, 0, -sin yaw).
+    const rx = Math.cos(p.yaw);
+    const rz = -Math.sin(p.yaw);
+    this.camera.position.set(
+      px + rx * p.bobX,
+      py + p.eyeOffset + p.bobY,
+      pz + rz * p.bobX,
+    );
+    this.camera.rotation.set(p.pitch + p.punchPitch, p.yaw, 0);
+    if (this.camera.fov !== t.baseFov) {
+      this.camera.fov = t.baseFov;
+      this.camera.updateProjectionMatrix();
+      this.lighting?.onResize(); // CSM refits when the frustum changes
+    }
+  }
+
+  /** Debug/capture hook: place the camera and aim it (debug mode only). */
   setCameraPose(px: number, py: number, pz: number, tx: number, ty: number, tz: number): void {
     this.camera.position.set(px, py, pz);
     this.camera.lookAt(tx, ty, tz);

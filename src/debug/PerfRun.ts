@@ -7,7 +7,10 @@ export interface PerfResult {
   warmupFrames: number;
   avgMs: number;
   p95Ms: number;
+  p99Ms: number;
   worstMs: number;
+  /** Frame-time standard deviation (ms) — pacing consistency. */
+  stdDevMs: number;
   drawCalls: number;
   triangles: number;
   heapStartMB: number;
@@ -69,16 +72,24 @@ export class PerfRun {
     if (state.perf.triangles > this.maxTris) this.maxTris = state.perf.triangles;
     if (this.frame % HEAP_EVERY === 0) this.heapSamples.push(heapMB());
     this.frame++;
-    if (this.frame >= this.target) this.finish();
+    if (this.frame >= this.target) this.finish(state);
   }
 
-  private finish(): void {
+  private finish(state: GameState): void {
     this.active = false;
+    state.cameraMode = 'player'; // hand the camera back to the player rig
     const measured = Array.from(this.frameMsBuf.subarray(WARMUP));
     measured.sort((a, b) => a - b);
-    const avg = measured.reduce((s, v) => s + v, 0) / Math.max(1, measured.length);
-    const p95 = measured[Math.min(measured.length - 1, Math.floor(measured.length * 0.95))] ?? 0;
+    const n = Math.max(1, measured.length);
+    const avg = measured.reduce((s, v) => s + v, 0) / n;
+    const pick = (q: number): number =>
+      measured[Math.min(measured.length - 1, Math.floor(measured.length * q))] ?? 0;
+    const p95 = pick(0.95);
+    const p99 = pick(0.99);
     const worst = measured[measured.length - 1] ?? 0;
+    const stdDev = Math.sqrt(
+      measured.reduce((s, v) => s + (v - avg) * (v - avg), 0) / n,
+    );
 
     // Heap: compare medians of the first and last three post-warmup samples
     // (GC sawtooth makes single readings meaningless).
@@ -91,7 +102,9 @@ export class PerfRun {
       warmupFrames: WARMUP,
       avgMs: round2(avg),
       p95Ms: round2(p95),
+      p99Ms: round2(p99),
       worstMs: round2(worst),
+      stdDevMs: round2(stdDev),
       drawCalls: this.maxDraws,
       triangles: this.maxTris,
       heapStartMB: round2(head),

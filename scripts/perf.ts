@@ -15,6 +15,7 @@ const FRAMES = 600;
 
 const BUDGET = {
   p95Ms: 16.6,
+  p99Ms: 25,
   drawCalls: 150,
   triangles: 500_000,
   heapGrowthMB: 5, // "zero growth" with GC-noise tolerance
@@ -25,7 +26,9 @@ interface PerfResult {
   warmupFrames: number;
   avgMs: number;
   p95Ms: number;
+  p99Ms: number;
   worstMs: number;
+  stdDevMs: number;
   drawCalls: number;
   triangles: number;
   heapStartMB: number;
@@ -65,6 +68,7 @@ async function main(): Promise<void> {
     timeout: 120_000,
   });
   const result = (await page.evaluate(() => window.__cod.perfResult)) as PerfResult;
+  const hardware = await page.evaluate(() => window.__cod.getPerf().hardware);
   await browser.close();
 
   const outDir = resolve(ROOT, '.tmp');
@@ -73,9 +77,12 @@ async function main(): Promise<void> {
   writeFileSync(outPath, JSON.stringify(result, null, 2));
 
   console.log('\n[perf] ---- results (post-warmup) ----');
+  console.log(`hardware   : ${hardware}`);
   console.log(`avg frame  : ${result.avgMs} ms`);
   console.log(`p95 frame  : ${result.p95Ms} ms`);
+  console.log(`p99 frame  : ${result.p99Ms} ms`);
   console.log(`worst frame: ${result.worstMs} ms`);
+  console.log(`std dev    : ${result.stdDevMs} ms`);
   console.log(`draw calls : ${result.drawCalls}`);
   console.log(`triangles  : ${result.triangles}`);
   console.log(`heap       : ${result.heapStartMB} → ${result.heapEndMB} MB (Δ ${result.heapGrowthMB})`);
@@ -83,6 +90,7 @@ async function main(): Promise<void> {
 
   const verdicts: [string, boolean][] = [
     [`p95 ${result.p95Ms}ms ≤ ${BUDGET.p95Ms}ms`, result.p95Ms <= BUDGET.p95Ms],
+    [`p99 ${result.p99Ms}ms ≤ ${BUDGET.p99Ms}ms`, result.p99Ms <= BUDGET.p99Ms],
     [`draws ${result.drawCalls} ≤ ${BUDGET.drawCalls}`, result.drawCalls <= BUDGET.drawCalls],
     [`tris ${result.triangles} ≤ ${BUDGET.triangles}`, result.triangles <= BUDGET.triangles],
     [

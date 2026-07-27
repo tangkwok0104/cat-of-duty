@@ -34,6 +34,81 @@ export interface CrateBuffers {
   currRot: Float32Array;
 }
 
+/** Player simulation state. Physics writes position/grounded; the player
+ *  module writes look angles, feel offsets and eye height; render reads. */
+export interface PlayerState {
+  // Capsule CENTER, interpolatable (prev = last physics step, curr = now).
+  prevX: number; prevY: number; prevZ: number;
+  currX: number; currY: number; currZ: number;
+  /** Look angles in radians. Applied to the camera the SAME frame the mouse
+   *  moves — never interpolated, never smoothed. */
+  yaw: number;
+  pitch: number;
+  grounded: boolean;
+  crouching: boolean;
+  sprinting: boolean;
+  /** Horizontal speed (m/s) after the last physics step — drives bob. */
+  speed2D: number;
+  /** |vertical velocity| at the moment of landing; CameraFeel consumes it. */
+  landingImpact: number;
+  /** Camera offset above the capsule centre (crouch-lerped by CameraFeel). */
+  eyeOffset: number;
+  // Camera-feel offsets, written per render frame (transform-only feel).
+  bobX: number;
+  bobY: number;
+  punchPitch: number;
+}
+
+/** Desired movement, written by the player FSM each fixed step and consumed
+ *  by the physics character controller. */
+export interface PlayerIntent {
+  /** Normalised world-space wish direction. */
+  wishX: number;
+  wishZ: number;
+  jump: boolean;
+  crouch: boolean;
+  sprint: boolean;
+}
+
+/** Live-tunable feel values (Tweakpane panel binds straight to this). */
+export interface Tuning {
+  sensitivity: number; // rad per px
+  walkSpeed: number;
+  sprintMult: number;
+  crouchMult: number;
+  groundAccel: number;
+  airAccel: number;
+  stopDecel: number;
+  jumpVel: number;
+  gravity: number;
+  coyoteMs: number;
+  jumpBufferMs: number;
+  bobAmp: number;
+  bobFreq: number;
+  punchScale: number;
+  baseFov: number;
+}
+
+export function defaultTuning(): Tuning {
+  return {
+    sensitivity: 0.0022,
+    walkSpeed: 5.2,
+    sprintMult: 1.55,
+    crouchMult: 0.5,
+    groundAccel: 60,
+    airAccel: 12,
+    stopDecel: 90,
+    jumpVel: 7.2,
+    gravity: -22,
+    coyoteMs: 120,
+    jumpBufferMs: 100,
+    bobAmp: 0.035,
+    bobFreq: 1.9,
+    punchScale: 0.028,
+    baseFov: 72,
+  };
+}
+
 export interface PerfState {
   /** Last frame's wall-clock duration in ms. */
   frameMs: number;
@@ -50,16 +125,50 @@ export interface GameState {
   ready: boolean;
   level: LevelData;
   crates: CrateBuffers | null;
+  player: PlayerState;
+  playerIntent: PlayerIntent;
+  /** One-shot teleport mailbox (debug/harness → physics). */
+  playerTeleport: { x: number; y: number; z: number; yaw: number; pitch: number } | null;
+  tuning: Tuning;
+  /** 'player' = camera follows the player rig; 'debug' = posed by the debug
+   *  API / perf harness. */
+  cameraMode: 'player' | 'debug';
   quality: { tier: QualityTier; auto: boolean };
   perf: PerfState;
+  /** GPU renderer string (UNMASKED_RENDERER_WEBGL) for honest perf reports. */
+  hardware: string;
 }
+
+/** Player spawn: south side, clear sightline to the arena centre (the SE
+ *  pillar at (6,6) must not block the first thing the player ever sees). */
+export const PLAYER_SPAWN = { x: 2.5, y: 0.9, z: 9.5, yaw: 0.26 } as const;
 
 export function createGameState(): GameState {
   return {
     ready: false,
     level: { staticColliders: [], dynamicBoxes: [] },
     crates: null,
+    player: {
+      prevX: PLAYER_SPAWN.x, prevY: PLAYER_SPAWN.y, prevZ: PLAYER_SPAWN.z,
+      currX: PLAYER_SPAWN.x, currY: PLAYER_SPAWN.y, currZ: PLAYER_SPAWN.z,
+      yaw: PLAYER_SPAWN.yaw,
+      pitch: 0,
+      grounded: false,
+      crouching: false,
+      sprinting: false,
+      speed2D: 0,
+      landingImpact: 0,
+      eyeOffset: 0.72,
+      bobX: 0,
+      bobY: 0,
+      punchPitch: 0,
+    },
+    playerIntent: { wishX: 0, wishZ: 0, jump: false, crouch: false, sprint: false },
+    playerTeleport: null,
+    tuning: defaultTuning(),
+    cameraMode: 'player',
     quality: { tier: 0, auto: true },
     perf: { frameMs: 0, drawCalls: 0, triangles: 0, heapMB: -1 },
+    hardware: 'unknown',
   };
 }

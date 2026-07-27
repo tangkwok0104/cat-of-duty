@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "capture": "tsx scripts/capture.ts",
-    "perf": "tsx scripts/perf.ts"
+    "perf": "tsx scripts/perf.ts",
+    "latency": "tsx scripts/latency.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
@@ -20,6 +21,7 @@
     "tweakpane": "^4.0.5"
   },
   "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
     "@types/howler": "^2.2.13",
     "@types/node": "^26.1.1",
     "@types/three": "^0.185.1",

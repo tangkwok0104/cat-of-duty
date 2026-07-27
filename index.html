@@ -9,7 +9,19 @@
   </head>
   <body>
     <canvas id="game-canvas"></canvas>
-    <div id="hud-root"></div>
+    <div id="hud-root">
+      <div id="lock-prompt" class="hidden">
+        <div class="lock-card">
+          <div class="lock-title">CLICK TO ENGAGE</div>
+          <div class="lock-keys">
+            WASD MOVE&ensp;·&ensp;SHIFT SPRINT&ensp;·&ensp;CTRL CROUCH&ensp;·&ensp;SPACE JUMP
+          </div>
+          <div class="lock-keys lock-keys-debug">
+            Q QUALITY&ensp;·&ensp;T CRATES&ensp;·&ensp;F1 TUNING&ensp;·&ensp;ESC RELEASE
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="debug-root"></div>
     <div id="boot-screen">
       <div class="boot-card">

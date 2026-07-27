@@ -20,7 +20,8 @@ export class Loop {
 
   constructor(
     private readonly state: GameState,
-    private readonly physics: FixedStepSystem,
+    /** Run in order every fixed step (player intent BEFORE physics). */
+    private readonly fixedSystems: readonly FixedStepSystem[],
     private readonly render: RenderFn,
   ) {}
 
@@ -38,7 +39,7 @@ export class Loop {
       this.accumulator += frameMs / 1000;
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < MAX_CATCHUP_STEPS) {
-        this.physics.fixedStep(this.state);
+        for (const sys of this.fixedSystems) sys.fixedStep(this.state);
         this.accumulator -= FIXED_DT;
         steps++;
       }

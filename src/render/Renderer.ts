@@ -37,3 +37,13 @@ export function createRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
   renderer.info.autoReset = false;
   return renderer;
 }
+
+/** The real GPU behind the context — perf numbers are meaningless without it. */
+export function hardwareString(renderer: WebGLRenderer): string {
+  const gl = renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = ext
+    ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))
+    : String(gl.getParameter(gl.RENDERER));
+  return gpu;
+}

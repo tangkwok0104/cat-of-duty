@@ -1,6 +1,14 @@
 {
   "shots": [
     {
+      "name": "00-spawn",
+      "note": "player-eye spawn view with the pointer-lock prompt (M1 UI)",
+      "player": true,
+      "pos": [2.5, 0.9, 9.5],
+      "lookAt": [-0.5, 1.2, 0],
+      "settleMs": 600
+    },
+    {
       "name": "01-wide",
       "note": "grounded overview near player eye height — cover in foreground, pillar off-centre",
       "pos": [9.5, 2.0, 10.5],

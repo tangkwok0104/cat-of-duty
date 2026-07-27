@@ -102,6 +102,51 @@ body {
   color: var(--c-muted);
 }
 
+/* ---- Pointer-lock prompt ---- */
+#lock-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 12vh;
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+#lock-prompt.hidden {
+  opacity: 0;
+}
+
+.lock-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2) var(--s4);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+}
+
+.lock-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--c-accent);
+}
+
+.lock-keys {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  color: var(--c-text);
+}
+
+.lock-keys-debug {
+  color: var(--c-muted);
+}
+
 /* ---- Debug stats overlay ---- */
 .stats-panel {
   position: absolute;

@@ -15,6 +15,9 @@ interface Shot {
   lookAt: [number, number, number];
   settleMs?: number;
   boot?: boolean;
+  /** True = shoot from the player rig (teleport + look) instead of the
+   *  detached debug camera — keeps player-only UI (lock prompt) visible. */
+  player?: boolean;
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,11 +67,21 @@ async function main(): Promise<void> {
 
   for (const shot of shots) {
     await page.evaluate(
-      ([px, py, pz, tx, ty, tz, boot]) => {
+      ([px, py, pz, tx, ty, tz, boot, asPlayer]) => {
         window.__cod.showBoot(Boolean(boot));
-        window.__cod.setCamera(px as number, py as number, pz as number, tx as number, ty as number, tz as number);
+        if (asPlayer) {
+          // Yaw/pitch from the look vector (yaw 0 faces -Z).
+          const dx = (tx as number) - (px as number);
+          const dy = (ty as number) - (py as number);
+          const dz = (tz as number) - (pz as number);
+          const yaw = Math.atan2(-dx, -dz);
+          const pitch = Math.atan2(dy, Math.hypot(dx, dz));
+          window.__cod.setPlayer(px as number, py as number, pz as number, yaw, pitch);
+        } else {
+          window.__cod.setCamera(px as number, py as number, pz as number, tx as number, ty as number, tz as number);
+        }
       },
-      [...shot.pos, ...shot.lookAt, shot.boot ? 1 : 0],
+      [...shot.pos, ...shot.lookAt, shot.boot ? 1 : 0, shot.player ? 1 : 0],
     );
     await page.waitForTimeout(shot.settleMs ?? 400);
     const path = resolve(OUT_DIR, `${shot.name}.png`);

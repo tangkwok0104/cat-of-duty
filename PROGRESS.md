@@ -5,7 +5,7 @@
 | Milestone | Content | Status |
 |---|---|---|
 | M0 | Scaffold | ✅ approved |
-| M1 | Player controller | in progress |
+| M1 | Player controller | ✅ complete, pending approval |
 | M2 | **VERTICAL SLICE — playable game** (`/slice`) | — |
 | M3 | Weapons: 3-gun loadout, ADS, recoil, reload | — |
 | M4 | Cats: real models, animation, AI, hitboxes | — |
@@ -15,6 +15,72 @@
 | M8 | Polish + performance | — |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
+
+## M1 — Player Controller
+
+**Status: complete, pending approval.** Branch `m0-scaffold` (same working
+branch; rename/merge on approval). Play: `npm run dev` → click to lock →
+WASD/Shift/Ctrl/Space. `F1` opens the live feel-tuning panel.
+
+### Done
+
+- Pointer-lock mouse look: raw `movementX/Y × sensitivity` applied to
+  yaw/pitch the same frame — no smoothing, no acceleration, no interpolation
+  anywhere in the path. Denied-lock promise rejections handled (post-ESC
+  cooldown clicks no longer error).
+- WASD + sprint (forward-gated) + crouch (real capsule resize with headroom
+  check before standing) + jump. Rapier kinematic character controller:
+  autostep 0.35m, slope limit 50°, snap-to-ground, pushes dynamic crates.
+- Coyote time (120ms) + jump buffering (100ms), both tunable.
+- Camera feel: speed-driven head bob with ease-in/out envelope, spring-damped
+  landing punch, smooth crouch eye-height transitions — all additive view
+  offsets, never touching the mouse's yaw/pitch.
+- Movement character: hard accel (~90ms to full speed), harder braking
+  (~60ms to stop), modest air control — crisp, not floaty, not icy.
+- Tweakpane feel-tuning panel (F1) bound live to every movement/look/feel
+  value — tune "feels bad"→"feels right" in one sitting.
+- "CLICK TO ENGAGE" prompt with key hints; player-view spawn framed with a
+  clear sightline (spawn moved off the SE pillar it originally faced).
+- Input-to-render latency instrumentation in the input layer + `npm run
+  latency` harness; perf harness upgraded (p99, std dev, GPU hardware string).
+- Controller harness (`.tmp/feel-M1.ts`): 9/10 assertions from real
+  keyboard/mouse events, verified against game state (walk speed/direction,
+  sprint delta, instant stop, crouch+stand, jump apex+landing, mouse-steered
+  movement, wall containment). The 1 fail: native pointer lock is denied in
+  headless Chromium (environment, not code) — mechanics verified via the
+  harness capture-override; native lock needs one manual click-test at
+  approval.
+
+### Measured (Apple M5 Pro via ANGLE Metal, 1920×1080, ULTRA)
+
+- Input→render latency: p50 0.9ms / p95 1.7ms (300 samples), budget 20ms
+- Frames: avg 8.33ms / p95 9.2 / p99 9.3 / worst 9.4 / σ 0.38ms (vsync 120Hz)
+- 50 draw calls, 1.1k tris, heap Δ 0.00MB over 600 frames
+- Iris Xe target still unverified — margins are wide; re-check at M2 content
+
+### Stubbed / deferred
+
+- Step-up and slope limit are configured but unproven — the grey-box has no
+  low ledges or ramps; the slice's arena will exercise both.
+- Coyote/jump-buffer verified by code + tunable, not timing-asserted in the
+  harness (500ms-resolution polls can't catch a 120ms window reliably).
+- `/assets` packs (Quaternius cats, Kenney guns, sounds) not yet downloaded —
+  the v2 goal file assigns this as the parallel human task; slice falls back
+  to placeholders if empty.
+- Sprint FOV kick, weapon sway (M3 territory), damage states — not built.
+
+### Decisions
+
+- **Camera rotation is never interpolated** (position is) — rotation lag is
+  perceivable as input lag; position interpolation is what fixed-timestep
+  physics needs. Alternative (interpolate both) rejected: mushy aim.
+- **Manual gravity (-22) + jump velocity on a kinematic capsule** instead of
+  a dynamic body — FPS-standard, fully deterministic, no physics fighting.
+  Alternative (dynamic body + forces) rejected: floaty, hard to tune.
+- **Crate reset moved Q→T… R freed** — v2 slice reserves R for reload/restart.
+- **Crouch resizes the collider** (with stand-up headroom raycast) rather
+  than eye-height-only fake crouch — real gameplay difference under fire in
+  M2+. Alternative rejected as a lie the slice would expose.
 
 ## M0 — Scaffold
 

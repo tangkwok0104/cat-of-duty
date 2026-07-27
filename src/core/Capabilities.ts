@@ -15,3 +15,4 @@ export interface QualityControl {
   setTier(tier: QualityTier, auto: boolean): void;
   tierName(): string;
 }
+
