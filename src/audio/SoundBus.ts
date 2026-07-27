@@ -7,6 +7,13 @@ import { bus } from '../core/EventBus';
 export class SoundBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private volume = 0.32;
+
+  /** Master volume 0..1 (settings menu). */
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.master) this.master.gain.value = this.volume;
+  }
 
   constructor() {
     bus.on('weapon:fired', ({ profile }) => this.shot(profile));
@@ -40,7 +47,7 @@ export class SoundBus {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.32;
+      this.master.gain.value = this.volume;
       this.master.connect(this.ctx.destination);
     }
     void this.ctx.resume();

@@ -32,13 +32,13 @@ export class CatSystem {
   private started = false;
 
   constructor(private readonly scene: Scene) {
-    bus.on('enemy:hit', ({ id, killed }) => {
+    bus.on('enemy:hit', ({ id, killed, part }) => {
       const state = this.stateRef;
       if (!state) return;
       const cat = state.cats.find((c) => c.id === id);
       if (!cat || cat.phase !== 'alive') return;
       cat.flinch = 0.15;
-      if (killed) this.kill(state, cat);
+      if (killed) this.kill(state, cat, part === 'head');
     });
     bus.on('game:restart', () => this.restart());
   }
@@ -190,11 +190,26 @@ export class CatSystem {
     }
   }
 
-  private kill(state: GameState, cat: CatData): void {
+  private kill(state: GameState, cat: CatData, headshot: boolean): void {
     cat.phase = 'dying';
     cat.deadFor = 0;
     state.score.kills++;
     state.enemyRemoveQueue.push(cat.id); // hitbox gone immediately
+    // Score + combo: chain kills within 4s to climb the multiplier.
+    const s = state.score;
+    const now = performance.now() / 1000;
+    if (now < s.comboEndsAt) s.combo = Math.min(8, s.combo + 1);
+    else s.combo = 1;
+    s.comboEndsAt = now + 4;
+    s.score += Math.round(100 * (headshot ? 1.5 : 1) * s.combo);
+    if (s.score > s.best) {
+      s.best = s.score;
+      try {
+        localStorage.setItem('cod-best', String(s.best));
+      } catch {
+        /* private mode */
+      }
+    }
   }
 
   private restart(): void {
@@ -207,6 +222,11 @@ export class CatSystem {
     state.score.kills = 0;
     state.score.wave = 0;
     state.score.catsAlive = 0;
+    state.score.score = 0;
+    state.score.combo = 1;
+    state.score.comboEndsAt = 0;
+    state.score.shots = 0;
+    state.score.hits = 0;
     this.waveTimer = 0;
   }
 }

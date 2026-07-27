@@ -32,7 +32,10 @@ export class Input {
   private latencyCount = 0;
   private latencyCursor = 0;
 
+  private readonly lockTargetEl: HTMLElement;
+
   constructor(lockTarget: HTMLElement) {
+    this.lockTargetEl = lockTarget;
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -80,6 +83,13 @@ export class Input {
   /** Debug/back-compat: fire a callback on key press. */
   onKeyDown(code: string, fn: () => void): void {
     this.keyDownHandlers.set(code, fn);
+  }
+
+  /** UI-initiated lock request (menu DEPLOY button). */
+  requestLock(): void {
+    if (this.locked) return;
+    const req = this.lockTargetEl.requestPointerLock() as Promise<void> | undefined;
+    req?.catch(() => {});
   }
 
   isDown(code: string): boolean {

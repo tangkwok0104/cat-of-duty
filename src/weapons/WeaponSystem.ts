@@ -315,6 +315,8 @@ export class WeaponSystem {
     if (catId !== -1 && totalOnCat > 0) {
       this.applyDamage(state, catId, catPart, totalOnCat);
     }
+    state.score.shots++;
+    if (anyEnemyHit) state.score.hits++;
     bus.emit('weapon:fired', { hit: anyEnemyHit, profile: cfg.soundProfile });
   }
 

@@ -163,11 +163,35 @@ export class Hud {
       '<path d="M50 40 V60 M40 50 H60" stroke="currentColor" stroke-width="0.8"/>' +
       '</svg>';
 
-    // Death screen.
+    // Death screen with end-of-run stats.
     const death = make('death-screen', 'death-screen hidden-death', this.root);
     death.innerHTML =
       '<div class="death-title">K.I.A.</div>' +
+      '<div class="death-stats">' +
+      '<div class="ds-row"><span>SCORE</span><span id="ds-score">0</span></div>' +
+      '<div class="ds-row"><span>BEST</span><span id="ds-best">0</span></div>' +
+      '<div class="ds-row"><span>KILLS</span><span id="ds-kills">0</span></div>' +
+      '<div class="ds-row"><span>WAVE REACHED</span><span id="ds-wave">0</span></div>' +
+      '<div class="ds-row"><span>ACCURACY</span><span id="ds-acc">0%</span></div>' +
+      '</div>' +
       '<div class="death-sub">PRESS R TO REDEPLOY</div>';
+    for (const id of ['ds-score', 'ds-best', 'ds-kills', 'ds-wave', 'ds-acc']) {
+      const el = death.querySelector(`#${id}`);
+      if (el instanceof HTMLElement) this.els[id] = el;
+    }
+  }
+
+  /** Fill the death card the moment the run ends. */
+  fillDeathStats(score: number, best: number, kills: number, wave: number, shots: number, hits: number): void {
+    const set = (id: string, v: string): void => {
+      const el = this.els[id];
+      if (el) el.textContent = v;
+    };
+    set('ds-score', String(score));
+    set('ds-best', String(best));
+    set('ds-kills', String(kills));
+    set('ds-wave', String(wave));
+    set('ds-acc', shots > 0 ? `${Math.round((hits / shots) * 100)}%` : '—');
   }
 
   private hitmarker(kill: boolean, headshot: boolean): void {
@@ -335,11 +359,18 @@ export class Hud {
       this.els['lowhp-vignette']?.style.setProperty('opacity', String(lowHp * 0.075));
     }
 
+    const s = state.score;
     const kills = this.els['score-kills'];
-    if (kills) kills.textContent = `KILLS ${state.score.kills}`;
+    if (kills) {
+      const combo = now / 1000 < s.comboEndsAt && s.combo > 1 ? ` ×${s.combo}` : '';
+      kills.textContent = `${s.score}${combo}`;
+    }
     const wave = this.els['score-wave'];
     if (wave) {
-      wave.textContent = state.score.wave > 0 ? `WAVE ${state.score.wave} · ${state.score.catsAlive} HOSTILE` : 'STANDBY';
+      wave.textContent =
+        s.wave > 0
+          ? `WAVE ${s.wave} · ${s.catsAlive} HOSTILE · ${s.kills} KILLS`
+          : 'STANDBY';
     }
   }
 }

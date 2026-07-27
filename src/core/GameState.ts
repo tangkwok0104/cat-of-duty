@@ -162,6 +162,16 @@ export interface ScoreState {
   kills: number;
   wave: number;
   catsAlive: number;
+  /** Points: 100/kill, ×1.5 headshot, × combo multiplier. */
+  score: number;
+  /** Kill-chain multiplier (1..8), decays 4s after the last kill. */
+  combo: number;
+  comboEndsAt: number;
+  /** Accuracy tracking (trigger pulls that hit ≥1 enemy / total pulls). */
+  shots: number;
+  hits: number;
+  /** Best score this browser (localStorage). */
+  best: number;
 }
 
 export type CatPhase = 'alive' | 'dying';
@@ -243,7 +253,10 @@ export function createGameState(): GameState {
       scoped: false,
     },
     health: { hp: 100, dead: false, lastDamageAt: -Infinity },
-    score: { kills: 0, wave: 0, catsAlive: 0 },
+    score: {
+      kills: 0, wave: 0, catsAlive: 0,
+      score: 0, combo: 1, comboEndsAt: 0, shots: 0, hits: 0, best: 0,
+    },
     cats: [],
     colliderToEnemy: new Map(),
     enemySpawnQueue: [],

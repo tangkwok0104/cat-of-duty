@@ -1,0 +1,160 @@
+/* Main menu overlay — dense mil-spec card, tokens only. */
+#menu-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    rgba(11, 13, 9, 0.55),
+    rgba(11, 13, 9, 0.85) 78%
+  );
+  transition: opacity var(--t-med) var(--ease-out);
+  pointer-events: auto;
+}
+
+#menu-overlay.menu-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s4) var(--s6);
+  background: var(--panel-bg);
+  backdrop-filter: blur(calc(var(--panel-blur) * 2));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+}
+
+.menu-mark {
+  width: var(--s6);
+  height: var(--s6);
+  color: var(--c-accent);
+}
+
+.menu-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--c-text);
+}
+
+.menu-sub {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.42em;
+  color: var(--c-muted);
+  margin-top: calc(-1 * var(--s1));
+}
+
+.menu-btn {
+  margin-top: var(--s1);
+  padding: var(--s2) var(--s6);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--c-bg);
+  background: var(--c-accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease-out), filter var(--t-fast) var(--ease-out);
+}
+
+.menu-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.menu-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin-top: var(--s2);
+  min-width: 380px;
+}
+
+.menu-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 48px;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  color: var(--c-muted);
+}
+
+.menu-val {
+  color: var(--c-accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Range inputs on the dark card: accent thumb, subtle track. */
+.menu-row input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--c-surface-2);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.menu-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  border: none;
+  cursor: pointer;
+}
+
+/* Quality: macOS-style segmented control. */
+.menu-seg {
+  grid-column: 2 / 4;
+  display: inline-flex;
+  gap: var(--s05);
+  padding: var(--s05);
+  background: var(--c-surface-2);
+  border-radius: 999px;
+  justify-content: space-between;
+}
+
+.seg-chip {
+  flex: 1;
+  padding: var(--s05) var(--s1);
+  font-family: var(--font-hud);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  color: var(--c-muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.seg-chip:hover {
+  color: var(--c-text);
+}
+
+.seg-chip.seg-active {
+  color: var(--c-text);
+  background: var(--c-bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.menu-hint {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-subtle);
+  margin-top: var(--s1);
+}

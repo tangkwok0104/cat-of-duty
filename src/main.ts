@@ -15,6 +15,7 @@ import { Health } from './player/Health';
 import { WeaponSystem } from './weapons/WeaponSystem';
 import { CatSystem } from './enemies/CatSystem';
 import { Hud } from './ui/Hud';
+import { Menu } from './ui/Menu';
 import { SoundBus } from './audio/SoundBus';
 import { buildGreyBoxRoom } from './levels/GreyBoxRoom';
 import { StatsOverlay } from './debug/StatsOverlay';
@@ -28,14 +29,7 @@ async function boot(): Promise<void> {
   const bootScreen = document.getElementById('boot-screen');
   const bootBar = document.getElementById('boot-bar-fill');
   const bootStatus = document.getElementById('boot-status');
-  const lockPrompt = document.getElementById('lock-prompt');
-  if (
-    !(canvas instanceof HTMLCanvasElement) ||
-    !bootScreen ||
-    !bootBar ||
-    !bootStatus ||
-    !lockPrompt
-  ) {
+  if (!(canvas instanceof HTMLCanvasElement) || !bootScreen || !bootBar || !bootStatus) {
     throw new Error('index.html is missing required elements');
   }
 
@@ -85,6 +79,16 @@ async function boot(): Promise<void> {
   const hud = new Hud();
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
+  // Best score survives sessions.
+  try {
+    state.score.best = Number(localStorage.getItem('cod-best') ?? 0) || 0;
+  } catch {
+    /* private mode */
+  }
+  bus.on('player:died', () => {
+    const s = state.score;
+    hud.fillDeathStats(s.score, s.best, s.kills, s.wave, s.shots, s.hits);
+  });
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
   const tuningPanel = new TuningPanel(state);
@@ -109,20 +113,15 @@ async function boot(): Promise<void> {
     }
   });
 
-  // "Click to engage" prompt: visible whenever the player camera is live but
-  // the pointer isn't locked. Toggled only on change — no per-frame DOM churn.
-  let promptShown = false;
-  const updatePrompt = (): void => {
-    const show =
-      state.ready &&
-      !input.locked &&
-      !input.captureOverride && // harness play = effectively locked
-      state.cameraMode === 'player';
-    if (show !== promptShown) {
-      promptShown = show;
-      lockPrompt.classList.toggle('hidden', !show);
-    }
-  };
+  // Main menu overlay: DEPLOY/RESUME + settings; shows whenever the pointer
+  // is free (and the death card isn't up).
+  const menu = new Menu(state, quality, {
+    lock: () => {
+      sound.unlock();
+      input.requestLock();
+    },
+    setVolume: (v) => sound.setVolume(v),
+  });
 
   // Fixed order matters: player intent → health regen → cat AI → physics
   // (which applies player movement and mirrors cat colliders).
@@ -154,7 +153,7 @@ async function boot(): Promise<void> {
     quality.observe(frameMs, now);
     stats.frame(frameMs);
     perfRun.afterRender(state, frameMs);
-    updatePrompt();
+    menu.update(input.locked, input.captureOverride);
   });
 
   // GPU context loss: stop cleanly and tell the player, instead of a frozen
@@ -171,7 +170,6 @@ async function boot(): Promise<void> {
 
   state.ready = true; // window.__cod.ready reads this — single source of truth
   bootScreen.classList.add('hidden');
-  updatePrompt();
 }
 
 boot().catch((err: unknown) => {
