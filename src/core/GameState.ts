@@ -121,10 +121,71 @@ export interface PerfState {
 
 export type QualityTier = 0 | 1 | 2 | 3 | 4;
 
+/** One weapon for the slice; becomes data-driven configs in M3. */
+export interface WeaponState {
+  ammo: number;
+  reserve: number;
+  reloading: boolean;
+  reloadEndsAt: number;
+  /** ADS blend 0 (hip) → 1 (sights). */
+  ads: number;
+  /** Additive camera pitch from recoil (spring-recovered). */
+  recoilPitch: number;
+  /** Muzzle flash time-to-live in seconds (>0 = visible). */
+  flashTtl: number;
+  lastShotAt: number;
+}
+
+export interface HealthState {
+  hp: number;
+  dead: boolean;
+  lastDamageAt: number;
+}
+
+export interface ScoreState {
+  kills: number;
+  wave: number;
+  catsAlive: number;
+}
+
+export type CatPhase = 'alive' | 'dying';
+
+export interface CatData {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  hp: number;
+  phase: CatPhase;
+  /** Movement speed (m/s), varied per cat. */
+  speed: number;
+  /** Seconds of hit-flinch remaining. */
+  flinch: number;
+  /** Seconds until this cat may claw the player again. */
+  attackCooldown: number;
+  /** Wall-clock seconds since death (drives fall-over + despawn). */
+  deadFor: number;
+}
+
+export interface EnemyColliderRef {
+  id: number;
+  part: 'head' | 'body';
+}
+
 export interface GameState {
   ready: boolean;
   level: LevelData;
   crates: CrateBuffers | null;
+  weapon: WeaponState;
+  health: HealthState;
+  score: ScoreState;
+  cats: CatData[];
+  /** Rapier collider handle → which cat + which part (for hitscan). */
+  colliderToEnemy: Map<number, EnemyColliderRef>;
+  /** Spawn/remove request queues (enemies → physics). */
+  enemySpawnQueue: { id: number; x: number; z: number }[];
+  enemyRemoveQueue: number[];
   player: PlayerState;
   playerIntent: PlayerIntent;
   /** One-shot teleport mailbox (debug/harness → physics). */
@@ -143,11 +204,30 @@ export interface GameState {
  *  pillar at (6,6) must not block the first thing the player ever sees). */
 export const PLAYER_SPAWN = { x: 2.5, y: 0.9, z: 9.5, yaw: 0.26 } as const;
 
+export const MAG_SIZE = 30;
+export const RESERVE_START = 90;
+
 export function createGameState(): GameState {
   return {
     ready: false,
     level: { staticColliders: [], dynamicBoxes: [] },
     crates: null,
+    weapon: {
+      ammo: MAG_SIZE,
+      reserve: RESERVE_START,
+      reloading: false,
+      reloadEndsAt: 0,
+      ads: 0,
+      recoilPitch: 0,
+      flashTtl: 0,
+      lastShotAt: 0,
+    },
+    health: { hp: 100, dead: false, lastDamageAt: -Infinity },
+    score: { kills: 0, wave: 0, catsAlive: 0 },
+    cats: [],
+    colliderToEnemy: new Map(),
+    enemySpawnQueue: [],
+    enemyRemoveQueue: [],
     player: {
       prevX: PLAYER_SPAWN.x, prevY: PLAYER_SPAWN.y, prevZ: PLAYER_SPAWN.z,
       currX: PLAYER_SPAWN.x, currY: PLAYER_SPAWN.y, currZ: PLAYER_SPAWN.z,

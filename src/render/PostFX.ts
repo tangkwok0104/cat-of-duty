@@ -9,10 +9,12 @@ import {
   SelectiveBloomEffect,
   ToneMappingEffect,
   ToneMappingMode,
+  HueSaturationEffect,
   VignetteEffect,
   NoiseEffect,
   BlendFunction,
 } from 'postprocessing';
+import type { Mesh } from 'three';
 import { N8AOPostPass } from 'n8ao';
 import { bus } from '../core/EventBus';
 
@@ -26,6 +28,7 @@ export class PostFX {
   private readonly aoPass: N8AOPostPass;
   private readonly bloom: SelectiveBloomEffect;
   private readonly bloomPass: EffectPass;
+  private hueSat!: HueSaturationEffect;
 
   constructor(renderer: WebGLRenderer, scene: Scene, camera: PerspectiveCamera) {
     this.composer = new EffectComposer(renderer, {
@@ -60,10 +63,12 @@ export class PostFX {
     this.composer.addPass(this.bloomPass);
 
     const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
+    // Death desaturation: saturation eased toward -0.85 while dead.
+    this.hueSat = new HueSaturationEffect({ saturation: 0 });
     const vignette = new VignetteEffect({ offset: 0.3, darkness: 0.5 });
     const grain = new NoiseEffect({ blendFunction: BlendFunction.COLOR_DODGE, premultiply: true });
     grain.blendMode.opacity.value = 0.035;
-    this.composer.addPass(new EffectPass(camera, toneMapping, vignette, grain));
+    this.composer.addPass(new EffectPass(camera, toneMapping, this.hueSat, vignette, grain));
 
     const smaa = new SMAAEffect({
       preset: SMAAPreset.HIGH,
@@ -82,6 +87,16 @@ export class PostFX {
 
   setBloomEnabled(on: boolean): void {
     this.bloomPass.enabled = on;
+  }
+
+  /** Register additional emissives (viewmodel muzzle flash etc.). */
+  addBloomMeshes(meshes: Mesh[]): void {
+    for (const m of meshes) this.bloom.selection.add(m);
+  }
+
+  /** 0 = normal colour, 1 = fully drained (death). */
+  setDesaturation(amount: number): void {
+    this.hueSat.saturation = -0.85 * amount;
   }
 
   render(): void {

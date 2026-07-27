@@ -41,6 +41,9 @@ export class RenderSystem implements CameraPoser {
     this.camera.rotation.order = 'YXZ';
     this.camera.position.set(7.5, 1.7, 9.0);
     this.camera.lookAt(0, 1.0, 0);
+    // The camera carries children (weapon viewmodel) — it must be IN the
+    // scene graph or those children never render.
+    this.scene.add(this.camera);
 
     bus.on('level:built', ({ dynamicCrateMesh }) => {
       this.dynamicCrates = dynamicCrateMesh;
@@ -130,9 +133,17 @@ export class RenderSystem implements CameraPoser {
       py + p.eyeOffset + p.bobY,
       pz + rz * p.bobX,
     );
-    this.camera.rotation.set(p.pitch + p.punchPitch, p.yaw, 0);
-    if (this.camera.fov !== t.baseFov) {
-      this.camera.fov = t.baseFov;
+    // Recoil is additive pitch, like the landing punch — the mouse's angles
+    // stay untouched underneath (aim returns exactly where it was).
+    this.camera.rotation.set(
+      p.pitch + p.punchPitch + state.weapon.recoilPitch,
+      p.yaw,
+      0,
+    );
+    // ADS narrows FOV toward 55° per the slice spec.
+    const targetFov = t.baseFov + (55 - t.baseFov) * state.weapon.ads;
+    if (Math.abs(this.camera.fov - targetFov) > 0.01) {
+      this.camera.fov = targetFov;
       this.camera.updateProjectionMatrix();
       this.lighting?.onResize(); // CSM refits when the frustum changes
     }

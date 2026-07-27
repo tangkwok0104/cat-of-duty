@@ -6,7 +6,7 @@ import type {
 } from '@dimforge/rapier3d-compat';
 import { FIXED_DT } from '../core/Time';
 import { PLAYER_SPAWN, type GameState } from '../core/GameState';
-import type { CrateResetter } from '../core/Capabilities';
+import type { CrateResetter, HitscanCaster, BulletHit } from '../core/Capabilities';
 
 type RapierModule = typeof import('@dimforge/rapier3d-compat');
 
@@ -18,6 +18,14 @@ const CROUCH_CENTER_DROP = STAND_HALF_HEIGHT - CROUCH_HALF_HEIGHT;
 const DEG = Math.PI / 180;
 const TERMINAL_FALL = -30;
 const LANDING_IMPACT_MIN = 3; // m/s of fall before the camera punch registers
+
+// Cat hitboxes (placeholder rig): body capsule + head ball on top.
+const CAT_BODY_HALF = 0.22;
+const CAT_BODY_RADIUS = 0.22;
+export const CAT_BODY_CENTER_Y = 0.44;
+export const CAT_HEAD_Y = 0.95;
+const CAT_HEAD_RADIUS = 0.16;
+const BULLET_IMPULSE = 90; // shove for dynamic crates when shot
 
 // Perf note: rapier's translation()/rotation() getters allocate small
 // objects each fixed step (6 bodies × 2 × 60Hz). Measured heap growth over
@@ -31,7 +39,7 @@ const LANDING_IMPACT_MIN = 3; // m/s of fall before the camera punch registers
  *  Rapier is dynamic-imported: its compat build inlines ~2 MB of WASM as
  *  base64, and splitting it out of the main chunk lets the renderer and UI
  *  parse while physics streams in. */
-export class PhysicsSystem implements CrateResetter {
+export class PhysicsSystem implements CrateResetter, HitscanCaster {
   private world!: World;
   private RAPIER!: RapierModule;
   private crateBodies: RigidBody[] = [];
@@ -46,6 +54,9 @@ export class PhysicsSystem implements CrateResetter {
   private velY = 0;
   private velZ = 0;
   private crouched = false;
+
+  // Cat bodies, keyed by cat id.
+  private catBodies = new Map<number, { body: RigidBody; head: Collider; torso: Collider }>();
 
   async init(state: GameState): Promise<void> {
     this.stateRef = state;
@@ -134,6 +145,7 @@ export class PhysicsSystem implements CrateResetter {
     // Player movement is computed and queued BEFORE world.step(), which is
     // what actually applies the kinematic translation.
     this.stepPlayer(state);
+    this.syncEnemies(state);
     this.world.step();
     if (crates) this.snapshot(state);
     // Player's authoritative post-step position.
@@ -240,6 +252,94 @@ export class PhysicsSystem implements CrateResetter {
       p.prevY += dy; // no interpolation glitch across the resize
     }
     this.crouched = on;
+  }
+
+  /** Create/remove cat bodies from the queues and follow the AI's positions.
+   *  Cats are kinematic hit-targets: the AI (enemies/) owns motion, physics
+   *  owns the colliders the hitscan sees. */
+  private syncEnemies(state: GameState): void {
+    for (const req of state.enemySpawnQueue) {
+      const body = this.world.createRigidBody(
+        this.RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
+          req.x,
+          CAT_BODY_CENTER_Y,
+          req.z,
+        ),
+      );
+      const torso = this.world.createCollider(
+        this.RAPIER.ColliderDesc.capsule(CAT_BODY_HALF, CAT_BODY_RADIUS),
+        body,
+      );
+      const head = this.world.createCollider(
+        this.RAPIER.ColliderDesc.ball(CAT_HEAD_RADIUS).setTranslation(
+          0,
+          CAT_HEAD_Y - CAT_BODY_CENTER_Y,
+          0,
+        ),
+        body,
+      );
+      this.catBodies.set(req.id, { body, head, torso });
+      state.colliderToEnemy.set(torso.handle, { id: req.id, part: 'body' });
+      state.colliderToEnemy.set(head.handle, { id: req.id, part: 'head' });
+    }
+    state.enemySpawnQueue.length = 0;
+
+    for (const id of state.enemyRemoveQueue) {
+      const entry = this.catBodies.get(id);
+      if (!entry) continue;
+      state.colliderToEnemy.delete(entry.torso.handle);
+      state.colliderToEnemy.delete(entry.head.handle);
+      this.world.removeRigidBody(entry.body); // colliders go with the body
+      this.catBodies.delete(id);
+    }
+    state.enemyRemoveQueue.length = 0;
+
+    for (const cat of state.cats) {
+      if (cat.phase !== 'alive') continue;
+      const entry = this.catBodies.get(cat.id);
+      entry?.body.setNextKinematicTranslation({ x: cat.x, y: CAT_BODY_CENTER_Y, z: cat.z });
+    }
+  }
+
+  /** HitscanCaster: bullet ray excluding the player; shoves dynamic bodies. */
+  castBullet(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    maxToi: number,
+    out: BulletHit,
+  ): void {
+    const ray = new this.RAPIER.Ray({ x: ox, y: oy, z: oz }, { x: dx, y: dy, z: dz });
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      maxToi,
+      true,
+      undefined,
+      undefined,
+      this.playerCollider,
+      this.playerBody,
+    );
+    if (!hit) {
+      out.hit = false;
+      out.collider = -1;
+      return;
+    }
+    const t = hit.timeOfImpact;
+    out.hit = true;
+    out.collider = hit.collider.handle;
+    out.px = ox + dx * t;
+    out.py = oy + dy * t;
+    out.pz = oz + dz * t;
+    out.nx = hit.normal.x;
+    out.ny = hit.normal.y;
+    out.nz = hit.normal.z;
+    const body = hit.collider.parent();
+    if (body && body.isDynamic()) {
+      body.applyImpulseAtPoint(
+        { x: dx * BULLET_IMPULSE, y: dy * BULLET_IMPULSE, z: dz * BULLET_IMPULSE },
+        { x: out.px, y: out.py, z: out.pz },
+        true,
+      );
+    }
   }
 
   /** Room to stand up? Cast a ray up from the crouched capsule's crown. */

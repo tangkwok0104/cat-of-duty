@@ -1,6 +1,7 @@
-import { createGameState } from './core/GameState';
+import { createGameState, PLAYER_SPAWN } from './core/GameState';
 import { Loop } from './core/Loop';
 import { Input } from './core/Input';
+import { bus } from './core/EventBus';
 import { loadHdri, loadPbrSet, TOTAL_LOAD_UNITS } from './core/Assets';
 import { createRenderer, hardwareString } from './render/Renderer';
 import { RenderSystem } from './render/RenderSystem';
@@ -10,6 +11,11 @@ import { QualityManager } from './render/QualityManager';
 import { PhysicsSystem } from './physics/PhysicsSystem';
 import { PlayerController } from './player/PlayerController';
 import { CameraFeel } from './player/CameraFeel';
+import { Health } from './player/Health';
+import { WeaponSystem } from './weapons/WeaponSystem';
+import { CatSystem } from './enemies/CatSystem';
+import { Hud } from './ui/Hud';
+import { SoundBus } from './audio/SoundBus';
 import { buildGreyBoxRoom } from './levels/GreyBoxRoom';
 import { StatsOverlay } from './debug/StatsOverlay';
 import { PerfRun } from './debug/PerfRun';
@@ -67,6 +73,13 @@ async function boot(): Promise<void> {
   const input = new Input(canvas);
   const player = new PlayerController(input);
   const cameraFeel = new CameraFeel();
+  const health = new Health();
+  const weapon = new WeaponSystem(input, physics, renderSys.camera, renderSys.scene);
+  postfx.addBloomMeshes(weapon.bloomMeshes);
+  const cats = new CatSystem(renderSys.scene);
+  const hud = new Hud();
+  const sound = new SoundBus();
+  canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
   const tuningPanel = new TuningPanel(state);
@@ -78,27 +91,58 @@ async function boot(): Promise<void> {
   });
   input.onKeyDown('KeyT', () => physics.resetCrates());
   input.onKeyDown('F1', () => tuningPanel.toggle());
+  // R routes by context: dead = full restart, alive = reload.
+  input.onKeyDown('KeyR', () => {
+    if (state.health.dead) {
+      bus.emit('game:restart', {});
+      state.playerTeleport = { ...PLAYER_SPAWN, yaw: PLAYER_SPAWN.yaw, pitch: 0 };
+    } else {
+      weapon.requestReload(performance.now() / 1000);
+    }
+  });
 
   // "Click to engage" prompt: visible whenever the player camera is live but
   // the pointer isn't locked. Toggled only on change — no per-frame DOM churn.
   let promptShown = false;
   const updatePrompt = (): void => {
-    const show = state.ready && !input.locked && state.cameraMode === 'player';
+    const show =
+      state.ready &&
+      !input.locked &&
+      !input.captureOverride && // harness play = effectively locked
+      state.cameraMode === 'player';
     if (show !== promptShown) {
       promptShown = show;
       lockPrompt.classList.toggle('hidden', !show);
     }
   };
 
-  // Player intent runs BEFORE physics each fixed step (jump/coyote decisions
-  // feed the same step's character-controller move).
-  const loop = new Loop(state, [player, physics], (alpha, frameMs) => {
+  // Fixed order matters: player intent → health regen → cat AI → physics
+  // (which applies player movement and mirrors cat colliders).
+  let wavesArmed = false;
+  let deathBlend = 0;
+  const loop = new Loop(state, [player, health, cats, physics], (alpha, frameMs) => {
+    const dt = frameMs / 1000;
+    const now = performance.now();
     perfRun.beforeRender();
     player.frameLook(state); // raw mouse → yaw/pitch, same frame
-    cameraFeel.frameUpdate(state, frameMs / 1000);
+    cameraFeel.frameUpdate(state, dt);
+    weapon.frameUpdate(state, dt, now / 1000);
+    cats.frameUpdate(state, now / 1000);
     renderSys.render(alpha, state);
     input.completeFrame(performance.now()); // closes input→render latency
-    quality.observe(frameMs, performance.now());
+    hud.frame(state, dt, now);
+    // First lock-in arms the first wave (also under the harness override).
+    if (!wavesArmed && (input.locked || input.captureOverride)) {
+      wavesArmed = true;
+      cats.startWaves();
+    }
+    // Death drains colour; respawn restores it.
+    const deathTarget = state.health.dead ? 1 : 0;
+    if (Math.abs(deathBlend - deathTarget) > 0.001) {
+      deathBlend += (deathTarget - deathBlend) * Math.min(1, 5 * dt);
+      postfx.setDesaturation(deathBlend);
+    }
+    quality.observe(frameMs, now);
     stats.frame(frameMs);
     perfRun.afterRender(state, frameMs);
     updatePrompt();

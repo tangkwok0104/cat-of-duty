@@ -11,6 +11,7 @@ const LATENCY_CAP = 1024;
 export class Input {
   private keys = new Set<string>();
   private edges = new Set<string>();
+  private buttons = new Set<number>();
   private keyDownHandlers = new Map<string, () => void>();
 
   private deltaX = 0;
@@ -43,6 +44,13 @@ export class Input {
     });
     window.addEventListener('blur', () => {
       this.keys.clear();
+      this.buttons.clear();
+    });
+    window.addEventListener('mousedown', (e) => {
+      if (this.locked || this.captureOverride) this.buttons.add(e.button);
+    });
+    window.addEventListener('mouseup', (e) => {
+      this.buttons.delete(e.button);
     });
 
     lockTarget.addEventListener('click', () => {
@@ -76,6 +84,11 @@ export class Input {
 
   isDown(code: string): boolean {
     return this.keys.has(code);
+  }
+
+  /** Mouse button held? 0 = fire, 2 = ADS. */
+  isButtonDown(button: number): boolean {
+    return this.buttons.has(button);
   }
 
   /** True if the key was pressed since the last clearEdges(). */

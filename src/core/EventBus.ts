@@ -14,6 +14,20 @@ export interface Events {
   };
   /** Quality tier changed (user or adaptive). */
   'quality:changed': { tier: number; reason: 'manual' | 'adaptive' };
+  /** A shot was fired (HUD spread, sound, viewmodel kick). */
+  'weapon:fired': { hit: boolean };
+  /** Trigger pulled on an empty mag. */
+  'weapon:dry': Record<string, never>;
+  'weapon:reload-start': Record<string, never>;
+  'weapon:reload-end': Record<string, never>;
+  /** A cat took damage. */
+  'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
+  /** The player took damage. */
+  'player:damaged': { amount: number };
+  'player:died': Record<string, never>;
+  /** Full slice restart (R while dead) — every system resets itself. */
+  'game:restart': Record<string, never>;
+  'wave:started': { wave: number; count: number };
 }
 
 type Handler<K extends keyof Events> = (payload: Events[K]) => void;

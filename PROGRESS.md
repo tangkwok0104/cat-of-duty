@@ -6,7 +6,7 @@
 |---|---|---|
 | M0 | Scaffold | ✅ approved |
 | M1 | Player controller | ✅ complete, pending approval |
-| M2 | **VERTICAL SLICE — playable game** (`/slice`) | — |
+| M2 | **VERTICAL SLICE — playable game** (`/slice`) | ✅ complete |
 | M3 | Weapons: 3-gun loadout, ADS, recoil, reload | — |
 | M4 | Cats: real models, animation, AI, hitboxes | — |
 | M5 | HUD + feedback polish | — |
@@ -15,6 +15,34 @@
 | M8 | Polish + performance | — |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
+
+## M2 — Vertical Slice (playable game)
+
+**Status: complete.** Full loop live: click → wave of cats → shoot →
+hitmarker+sound → kill → next wave → take damage → die → R restarts in place.
+Loop-integrity harness: **10/10 steps asserted from game state**, zero console
+errors. Perf in combat: 65 draws / 2.1k tris / p95 9.3ms / heap Δ 0.
+
+- Weapon: box-rifle viewmodel with paw (placeholder until /assets), hitscan
+  600RPM/34dmg (head ×2), 30-mag + R reload (2s), recoil spring (additive
+  pitch — aim returns), star muzzle flash + light, pooled impact particles,
+  bullets shove dynamic crates.
+- ADS: RMB, FOV→55 over 150ms, viewmodel centres, crosshair hides.
+- Cats: capsule+ears+vest placeholder (reads at 20m), ring spawns far from
+  player, seek + separation (no navmesh by spec), flinch on hit, keel-over
+  death + eye-glow fade, despawn 2s, claw 10dmg/1s in reach.
+- Waves 1→2→…→6, next when field clear; toast + HOSTILE counter.
+- Player: 100hp, regen after 5s, death desaturation + K.I.A. screen, R
+  restart with full state reset (no page reload).
+- HUD: crosshair spread (move/fire/ADS), hitmarker white-hit/red-kill,
+  ammo/health/kills/wave, damage vignette, all tokens + transform/opacity.
+- Audio: five WebAudio-synthesized sounds (shot/hit/kill/hurt/death +
+  reload/dry clicks) — original, license-clean; Howler takes over when real
+  files land. Gesture-gated (browser policy) — needs one human ear-check.
+- Deferred per slice spec: navmesh, ragdolls, killfeed, minimap, menus,
+  reload animation, weapon switching (M3), real cat models (M4).
+- Cats may clip through crates (straight-line pursuit is the spec'd slice
+  behaviour) — noted for M4 steering.
 
 ## M1 — Player Controller
 

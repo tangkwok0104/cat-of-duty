@@ -16,3 +16,26 @@ export interface QualityControl {
   tierName(): string;
 }
 
+export interface BulletHit {
+  hit: boolean;
+  /** Rapier collider handle (look up in GameState.colliderToEnemy). */
+  collider: number;
+  px: number;
+  py: number;
+  pz: number;
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+export interface HitscanCaster {
+  /** Ray from the camera through the world, excluding the player capsule.
+   *  Dynamic bodies hit take a small impulse along the ray (impact punch). */
+  castBullet(
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    maxToi: number,
+    out: BulletHit,
+  ): void;
+}
+

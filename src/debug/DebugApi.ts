@@ -30,6 +30,18 @@ export interface CodApi {
     hardware: string;
     player: { x: number; y: number; z: number; grounded: boolean; crouching: boolean; speed2D: number };
   };
+  /** Full gameplay state snapshot for loop-integrity assertions. */
+  getGame(): {
+    hp: number;
+    dead: boolean;
+    ammo: number;
+    reserve: number;
+    reloading: boolean;
+    kills: number;
+    wave: number;
+    catsAlive: number;
+    cats: { id: number; x: number; y: number; z: number; phase: string }[];
+  };
 }
 
 declare global {
@@ -94,6 +106,17 @@ export function installDebugApi(
         crouching: state.player.crouching,
         speed2D: state.player.speed2D,
       },
+    }),
+    getGame: () => ({
+      hp: state.health.hp,
+      dead: state.health.dead,
+      ammo: state.weapon.ammo,
+      reserve: state.weapon.reserve,
+      reloading: state.weapon.reloading,
+      kills: state.score.kills,
+      wave: state.score.wave,
+      catsAlive: state.score.catsAlive,
+      cats: state.cats.map((c) => ({ id: c.id, x: c.x, y: c.y, z: c.z, phase: c.phase })),
     }),
   };
   window.__cod = api;

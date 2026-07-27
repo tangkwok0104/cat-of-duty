@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "capture": "tsx scripts/capture.ts",
     "perf": "tsx scripts/perf.ts",
-    "latency": "tsx scripts/latency.ts"
+    "latency": "tsx scripts/latency.ts",
+    "loop": "tsx scripts/loop-integrity.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
