@@ -1,8 +1,24 @@
 # PROGRESS — Cat of Duty
 
-## M0 — Scaffold (current)
+## Roadmap (v2, adopted 2026-07-28 — vertical-slice-first)
 
-**Status: complete, pending approval.**
+| Milestone | Content | Status |
+|---|---|---|
+| M0 | Scaffold | ✅ approved |
+| M1 | Player controller | in progress |
+| M2 | **VERTICAL SLICE — playable game** (`/slice`) | — |
+| M3 | Weapons: 3-gun loadout, ADS, recoil, reload | — |
+| M4 | Cats: real models, animation, AI, hitboxes | — |
+| M5 | HUD + feedback polish | — |
+| M6 | Level art + environment pass | — |
+| M7 | Game loop: menus, waves, scoring, settings | — |
+| M8 | Polish + performance | — |
+
+North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
+
+## M0 — Scaffold
+
+**Status: complete, approved.**
 Branch: `m0-scaffold`. Playable with `npm run dev` → http://127.0.0.1:5177.
 
 ### Done

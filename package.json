@@ -16,7 +16,8 @@
     "howler": "^2.2.4",
     "n8ao": "^2.0.0",
     "postprocessing": "^6.39.3",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "tweakpane": "^4.0.5"
   },
   "devDependencies": {
     "@types/howler": "^2.2.13",
