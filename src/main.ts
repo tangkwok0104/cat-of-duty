@@ -89,6 +89,10 @@ async function boot(): Promise<void> {
     const s = state.score;
     hud.fillDeathStats(s.score, s.best, s.kills, s.wave, s.shots, s.hits);
   });
+  // Hit-stop on kills: 40ms world-freeze, camera stays live.
+  bus.on('enemy:hit', ({ killed }) => {
+    if (killed) state.hitStopUntil = performance.now() + 40;
+  });
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
   const tuningPanel = new TuningPanel(state);

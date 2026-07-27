@@ -7,12 +7,12 @@
 | M0 | Scaffold | ✅ approved |
 | M1 | Player controller | ✅ complete, pending approval |
 | M2 | **VERTICAL SLICE — playable game** (`/slice`) | ✅ complete |
-| M3 | Weapons: 3-gun loadout, ADS, recoil, reload | — |
-| M4 | Cats: real models, animation, AI, hitboxes | — |
-| M5 | HUD + feedback polish | — |
-| M6 | Level art + environment pass | — |
-| M7 | Game loop: menus, waves, scoring, settings | — |
-| M8 | Polish + performance | — |
+| M3 | Weapons: 3-gun loadout, ADS, recoil, reload | ✅ complete |
+| M4 | Cats: real models, animation, AI, hitboxes | ⛔ blocked on /assets (Quaternius pack — human download) |
+| M5 | HUD + feedback polish | ✅ complete |
+| M6 | Level art + environment pass | ⛔ blocked on /assets (level kit/textures) |
+| M7 | Game loop: menus, waves, scoring, settings | ✅ complete |
+| M8 | Polish + performance | ✅ partial (shake, hit-stop, budgets green; final pass after M4/M6) |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
@@ -43,6 +43,45 @@ errors. Perf in combat: 65 draws / 2.1k tris / p95 9.3ms / heap Δ 0.
   reload animation, weapon switching (M3), real cat models (M4).
 - Cats may clip through crates (straight-line pursuit is the spec'd slice
   behaviour) — noted for M4 steering.
+
+## M3 — Weapons (2026-07-28 overnight autopilot)
+
+Data-driven loadout in `weapons/WeaponConfig.ts` (typed TS data module — the
+judgment call vs raw JSON; same declarative shape, compiler-guarded):
+**PAWS-15** (auto 600rpm, learnable rise-right recoil pattern, tracers),
+**SCRATCH-12** (8×14 pellets — a clean point-blank blast one-pulls a base cat;
+12dmg left 4hp survivors, probe-caught), **LONGWHISKER** (105dmg, ADS-gated,
+scope overlay, penetrates one surface). Per-gun: 2D recoil patterns with
+spring recovery (additive — aim returns), cone spread per pellet, distance
+falloff, ADS FOV/time, reload, switch dip (1/2/3), positional sway + idle
+breathing, shells/tracers/decals (all pooled, allocation-free), per-gun synth
+shot flavours. Sniper at full ADS hides the viewmodel and shows a HUD scope
+(the centered gun otherwise sat inside the near plane — screenshot-caught).
+
+## M5 — HUD + feedback polish
+
+Killfeed (weapon ▸ victim, HS-flagged), minimap (player arrow + hostile
+dots), damage-direction wedge that tracks the attacker as you turn, delayed
+hp damage-trail, low-health vignette + synth heartbeat (cadence rises as hp
+falls), headshot hitmarker (X snaps 45°), ammo tick-pop. Harness hardening:
+aimed-shot steps now use physics-raycast LoS-verified shooter placement
+(pillar-clip flake class eliminated — 14/14 ×3 consecutive).
+
+## M7 — Game loop
+
+DEPLOY/RESUME menu over the idling arena with settings — sensitivity, FOV,
+quality (AUTO + 5 fixed tiers, macOS segmented), volume — persisted to
+localStorage with validation. Score system: 100/kill ×1.5 headshot × combo
+(chain kills within 4s, ×1..8), accuracy tracking, K.I.A. stats card (score/
+best/kills/wave/accuracy), best-score persistence. R still restarts in place.
+
+## M8 — Polish (partial, continues after M4/M6)
+
+Damage screen-shake (decaying jitter on punch/bob channels — never touches
+aim), 40ms hit-stop on kills (physics accumulator freezes, camera stays
+live, dropped time never replayed). Shader pre-compile at boot kills the
+first-shot hitch. Full battery green: loop 14/14, perf p95 9.8ms / p99
+10.3ms / 70 draws / 2.8k tris / heap Δ 0, latency p95 1.1ms.
 
 ## M1 — Player Controller
 

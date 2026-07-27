@@ -36,7 +36,15 @@ export class Loop {
       if (frameMs > MAX_FRAME_MS) frameMs = MAX_FRAME_MS;
       if (frameMs < 0) frameMs = 0;
 
-      this.accumulator += frameMs / 1000;
+      // Hit-stop: the world holds its breath for ~40ms on a kill while
+      // rendering (and the camera) stay live. Time inside the stop is
+      // DROPPED, not accumulated — otherwise physics would sprint to catch
+      // up afterwards and undo the effect.
+      if (now < this.state.hitStopUntil) {
+        this.accumulator = 0;
+      } else {
+        this.accumulator += frameMs / 1000;
+      }
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < MAX_CATCHUP_STEPS) {
         for (const sys of this.fixedSystems) sys.fixedStep(this.state);

@@ -215,6 +215,9 @@ export interface GameState {
   /** Harness-only: freeze cat movement so aimed-shot tests are
    *  deterministic. Never set by game code. */
   debugFreezeCats: boolean;
+  /** Hit-stop: physics accumulation pauses until this wall-clock ms
+   *  (rendering continues — a 40ms world-freeze that sells the kill). */
+  hitStopUntil: number;
   player: PlayerState;
   playerIntent: PlayerIntent;
   /** One-shot teleport mailbox (debug/harness → physics). */
@@ -262,6 +265,7 @@ export function createGameState(): GameState {
     enemySpawnQueue: [],
     enemyRemoveQueue: [],
     debugFreezeCats: false,
+    hitStopUntil: 0,
     player: {
       prevX: PLAYER_SPAWN.x, prevY: PLAYER_SPAWN.y, prevZ: PLAYER_SPAWN.z,
       currX: PLAYER_SPAWN.x, currY: PLAYER_SPAWN.y, currZ: PLAYER_SPAWN.z,

@@ -1,4 +1,5 @@
 import type { GameState } from '../core/GameState';
+import { bus } from '../core/EventBus';
 
 const STAND_EYE = 0.72; // above capsule centre
 const CROUCH_EYE = 0.45;
@@ -15,6 +16,14 @@ export class CameraFeel {
   private bobEnvelope = 0; // 0..1, eases bob in/out
   private punch = 0;
   private punchVel = 0;
+  private shake = 0; // damage shake energy, decays fast
+  private shakeT = 0;
+
+  constructor() {
+    bus.on('player:damaged', () => {
+      this.shake = Math.min(1, this.shake + 0.55);
+    });
+  }
 
   /** Called once per rendered frame with the real frame delta. */
   frameUpdate(state: GameState, frameDt: number): void {
@@ -44,6 +53,16 @@ export class CameraFeel {
     const accel = -this.punch * PUNCH_STIFFNESS - this.punchVel * PUNCH_DAMPING;
     this.punchVel += accel * frameDt;
     this.punch += this.punchVel * frameDt;
-    p.punchPitch = this.punch;
+
+    // Damage shake: decaying high-frequency jitter layered onto the punch
+    // pitch and lateral bob (transform-only, never touches aim angles).
+    let shakeOffset = 0;
+    if (this.shake > 0.001) {
+      this.shakeT += frameDt;
+      this.shake *= Math.max(0, 1 - 7 * frameDt);
+      shakeOffset = Math.sin(this.shakeT * 55) * this.shake * 0.02;
+      p.bobX += Math.cos(this.shakeT * 47) * this.shake * 0.02;
+    }
+    p.punchPitch = this.punch + shakeOffset;
   }
 }
