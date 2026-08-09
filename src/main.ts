@@ -100,9 +100,10 @@ async function boot(): Promise<void> {
     const s = state.score;
     hud.fillDeathStats(s.score, s.best, s.kills, s.wave, s.shots, s.hits);
   });
-  // Hit-stop on kills: 40ms world-freeze, camera stays live.
-  bus.on('enemy:hit', ({ killed }) => {
-    if (killed) state.hitStopUntil = performance.now() + 40;
+  // Hit-stop on kills: 40ms world-freeze, camera stays live. Headshots get
+  // 70ms — headroom on the emphasis kill (research: 40-80ms band).
+  bus.on('enemy:hit', ({ killed, part }) => {
+    if (killed) state.hitStopUntil = performance.now() + (part === 'head' ? 70 : 40);
   });
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);

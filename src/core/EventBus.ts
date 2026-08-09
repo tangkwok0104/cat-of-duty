@@ -27,6 +27,12 @@ export interface Events {
   'weapon:impact': { x: number; y: number; z: number };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
+  /** One ground step completed (emitted by CameraFeel at bob-phase
+   *  crossings, so step audio stays locked to the visual bob). */
+  'player:footstep': { sprinting: boolean; crouching: boolean };
+  /** Kill-chain tier increase within one 4s combo window (1 = first chain
+   *  tier, 3 = highest). Fires only on tier RISE, never per kill. */
+  'score:streak': { tier: 1 | 2 | 3; combo: number };
   /** A cat entered the field (heavy spawns get a growl). */
   'enemy:spawned': { id: number; archetype: import('./GameState').CatArchetype };
   /** A rusher/heavy started a claw swipe (battle meow + swipe anim). */

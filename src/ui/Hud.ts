@@ -10,6 +10,13 @@ const REFRESH_MS = 100;
 const MM_HALF_EXTENT = 19.5;
 const MM_SCALE = 148 / (MM_HALF_EXTENT * 2);
 
+// Original cat-parody streak labels — approved copy, exact strings.
+const STREAK_LABELS: Record<1 | 2 | 3, string> = {
+  1: 'DOUBLE SWAT',
+  2: 'CLAW FRENZY',
+  3: 'APEX PREDATOR',
+};
+
 /** Slice HUD: crosshair with live spread, ammo, health bar, kills/wave,
  *  hitmarker (white hit / red kill), damage vignette, death screen.
  *  DOM + tokens; every animation is transform/opacity only. */
@@ -67,6 +74,9 @@ export class Hud {
       this.hideBreather();
     });
     bus.on('wave:cleared', ({ wave, breatherS }) => this.showBreather(wave, breatherS));
+    // Fires only on tier RISE (never per kill) — no debounce/queue needed,
+    // the pop just plays immediately on each rise within the combo window.
+    bus.on('score:streak', ({ tier, combo }) => this.streakPop(tier, combo));
   }
 
   private build(): void {
@@ -125,6 +135,10 @@ export class Hud {
     dmg.innerHTML =
       '<svg viewBox="0 0 40 40" aria-hidden="true">' +
       '<path d="M20 2 L27 12 L13 12 Z" fill="currentColor"/></svg>';
+
+    // Kill-chain streak pop: centered below the crosshair, above the
+    // killfeed's vertical band. Text is set per-fire in streakPop().
+    make('streak-pop', 'streak-pop', this.root);
 
     // Low-health vignette (persistent while wounded) + killfeed column.
     make('lowhp-vignette', 'lowhp-vignette', this.root);
@@ -286,6 +300,17 @@ export class Hud {
     t.classList.remove('toast-play');
     void t.offsetWidth;
     t.classList.add('toast-play');
+  }
+
+  /** Kill-chain tier rise: legible within a frame of the kill, no queueing —
+   *  a fast second rise just restarts the animation on the new text. */
+  private streakPop(tier: 1 | 2 | 3, combo: number): void {
+    const el = this.els['streak-pop'];
+    if (!el) return;
+    el.textContent = `${STREAK_LABELS[tier]} ×${combo}`;
+    el.classList.remove('pop-play', 'streak-tier-1', 'streak-tier-2', 'streak-tier-3');
+    void el.offsetWidth; // restart the CSS animation
+    el.classList.add(`streak-tier-${tier}`, 'pop-play');
   }
 
   private waveToast(wave: number): void {

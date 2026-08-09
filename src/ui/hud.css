@@ -65,6 +65,46 @@
   100% { opacity: 0; transform: scale(0.9); }
 }
 
+/* ---- Streak pop ----
+   Centered below the crosshair/hitmarker cluster (top: 50%+46px clears the
+   hitmarker's 22px half-height) and above the killfeed's vertical band —
+   never overlaps either. Never blocks aim: no pointer events, modest size. */
+.streak-pop {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 46px);
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.streak-pop.streak-tier-1,
+.streak-pop.streak-tier-2 {
+  color: var(--c-accent);
+}
+
+.streak-pop.streak-tier-3 {
+  color: var(--c-danger);
+}
+
+.streak-pop.pop-play {
+  animation: streak-pop 1.2s var(--ease-snap);
+}
+
+@keyframes streak-pop {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+  25% { transform: translateX(-50%) scale(1); }
+  70% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) scale(0.95); }
+}
+
 /* ---- Health ---- */
 .hud-health {
   position: absolute;

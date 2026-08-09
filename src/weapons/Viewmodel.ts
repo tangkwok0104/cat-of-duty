@@ -40,6 +40,7 @@ export class Viewmodel {
   private muzzleTips = new Map<string, Vector3>();
   private flashLight: PointLight;
   private flashStar: Mesh;
+  private flashMaterial: MeshStandardMaterial;
   private active: WeaponConfig | null = null;
   /** Backward kick offset (spring-recovered by WeaponSystem). */
   kickZ = 0;
@@ -48,6 +49,12 @@ export class Viewmodel {
   /** Sway offsets written by WeaponSystem. */
   swayX = 0;
   swayY = 0;
+  /** Movement-sway rotation offsets written by WeaponSystem (spring-damped
+   *  pitch/roll/yaw from move speed + turning — composes with the pose
+   *  rotation in setPose, additive). */
+  swayPitch = 0;
+  swayRoll = 0;
+  swayYaw = 0;
 
   private static readonly HIP = { x: 0.3, y: -0.3, z: -0.32, roll: 0.06 };
   private static readonly ADS = { x: 0, y: -0.088, z: -0.26, roll: 0 };
@@ -72,6 +79,7 @@ export class Viewmodel {
       side: DoubleSide,
       depthWrite: false,
     });
+    this.flashMaterial = flashMat;
     // Star flash: three planes sharing the barrel axis — reads as a burst
     // from any angle instead of a white card.
     this.flashStar = new Mesh(new PlaneGeometry(0.065, 0.065), flashMat);
@@ -255,14 +263,22 @@ export class Viewmodel {
       h.y + (a.y - h.y) * ads - this.dip * 0.28 + this.swayY,
       h.z + (a.z - h.z) * ads + this.kickZ,
     );
-    this.group.rotation.z = h.roll + (a.roll - h.roll) * ads;
-    this.group.rotation.x = -this.dip * 0.9;
+    this.group.rotation.z = h.roll + (a.roll - h.roll) * ads + this.swayRoll;
+    this.group.rotation.x = -this.dip * 0.9 + this.swayPitch;
+    this.group.rotation.y = this.swayYaw;
   }
 
-  setFlash(on: boolean): void {
+  /** Flash decay: 0 = fully off, 1 = fresh burst. Re-rolls the star's
+   *  rotation only on ignition (rising from off) so a decaying flash
+   *  doesn't spin mid-fade. */
+  setFlashIntensity(t: number): void {
+    const on = t > 0;
+    if (on && this.flashLight.intensity <= 0) {
+      this.flashStar.rotation.z = Math.random() * Math.PI;
+    }
     this.flashStar.visible = on;
-    this.flashLight.intensity = on ? 9 : 0;
-    if (on) this.flashStar.rotation.z = Math.random() * Math.PI;
+    this.flashMaterial.opacity = 0.95 * t;
+    this.flashLight.intensity = on ? 9 * t : 0;
   }
 
   /** Muzzle tip in WORLD space (call after camera matrices update). */

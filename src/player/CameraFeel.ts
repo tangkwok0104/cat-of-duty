@@ -13,6 +13,7 @@ const BOB_ENVELOPE_SPEED = 6;
  *  it never touches yaw/pitch from the mouse (responsiveness contract). */
 export class CameraFeel {
   private bobPhase = 0;
+  private lastStepIndex = 0; // floor(bobPhase / PI); a footstep fires per half-cycle crossed
   private bobEnvelope = 0; // 0..1, eases bob in/out
   private punch = 0;
   private punchVel = 0;
@@ -40,7 +41,16 @@ export class CameraFeel {
     const envTarget = moving ? 1 : 0;
     this.bobEnvelope +=
       (envTarget - this.bobEnvelope) * Math.min(1, BOB_ENVELOPE_SPEED * frameDt);
-    if (moving) this.bobPhase += p.speed2D * t.bobFreq * frameDt;
+    if (moving) {
+      this.bobPhase += p.speed2D * t.bobFreq * frameDt;
+      // Step audio locked to the visual bob: fire once per half-cycle (PI)
+      // crossed this frame, never while airborne/stationary (moving gate above).
+      const stepIndex = Math.floor(this.bobPhase / Math.PI);
+      while (this.lastStepIndex < stepIndex) {
+        this.lastStepIndex++;
+        bus.emit('player:footstep', { sprinting: p.sprinting, crouching: p.crouching });
+      }
+    }
     const amp = t.bobAmp * (p.sprinting ? 1.45 : p.crouching ? 0.6 : 1) * this.bobEnvelope;
     p.bobY = Math.sin(this.bobPhase * 2) * amp;
     p.bobX = Math.cos(this.bobPhase) * amp * 0.55;

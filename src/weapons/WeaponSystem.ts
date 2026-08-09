@@ -3,14 +3,35 @@ import type { GameState } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import type { Input } from '../core/Input';
 import type { HitscanCaster, BulletHit } from '../core/Capabilities';
+import { FIXED_DT } from '../core/Time';
 import { WEAPONS, type WeaponConfig } from './WeaponConfig';
 import { Viewmodel } from './Viewmodel';
 import { ImpactBurst } from './ImpactBurst';
 import { ShellEjector, Tracers, Decals } from './GunFx';
 
-const FLASH_TTL = 0.05;
+const FLASH_TTL = 0.075;
+/** Flash stays at full intensity this long before it starts decaying —
+ *  a dropped frame or two can't eat the whole muzzle flash. */
+const FLASH_HOLD_S = 0.02;
 const SWITCH_TIME = 0.3;
 const RANGE = 150;
+
+// Recoil jitter: each shot scales its pattern step by a random factor in
+// this range so shots stop being bit-identical while the pattern stays
+// learnable (see fire()).
+const RECOIL_JITTER_MIN = 0.88;
+const RECOIL_JITTER_MAX = 1.12;
+
+// Movement sway (spring-damped, composes with the look-delta sway below).
+// Weaker damping than the look sway on purpose — on a stop the spring is
+// meant to overshoot once and settle, not just glide to rest.
+const MOVE_SWAY_SPRING = 22;
+const MOVE_SWAY_DAMP = 7;
+const MOVE_SWAY_PITCH_PER_MPS = 0.004; // forward/back speed → pitch
+const MOVE_SWAY_ROLL_PER_MPS = 0.0035; // strafe speed → roll lean
+const MOVE_SWAY_YAW_PER_PX = 0.00045; // look-delta → yaw lag
+const MOVE_SWAY_MAX = 0.045;
+const MOVE_SWAY_YAW_MAX = 0.035;
 
 const _dir = new Vector3();
 const _right = new Vector3();
@@ -40,6 +61,9 @@ export class WeaponSystem {
   private swayVX = 0;
   private swayVY = 0;
   private idleT = 0;
+  private moveSwayPitchVel = 0;
+  private moveSwayRollVel = 0;
+  private moveSwayYawVel = 0;
   private stateRef: GameState | null = null;
 
   constructor(
@@ -225,6 +249,37 @@ export class WeaponSystem {
     const idle = Math.sin(this.idleT * 1.7) * 0.0016 * adsDamp;
     this.viewmodel.swayY = clampAbs(this.viewmodel.swayY + this.swayVY * dt, 0.02) + idle;
 
+    // Movement sway: forward/back speed pitches the gun, strafe speed rolls
+    // it, and turning adds yaw lag — the "gun has weight" layer, additive
+    // on top of the look sway above. Velocity is read from the last FIXED
+    // physics step (curr-prev), not this render frame's dt, so it stays
+    // frame-rate independent even though frameUpdate runs once per render.
+    const dx = state.player.currX - state.player.prevX;
+    const dz = state.player.currZ - state.player.prevZ;
+    const sinYaw = Math.sin(state.player.yaw);
+    const cosYaw = Math.cos(state.player.yaw);
+    const fwdSpeed = -(dx * sinYaw + dz * cosYaw) / FIXED_DT;
+    const strafeSpeed = (dx * cosYaw - dz * sinYaw) / FIXED_DT;
+
+    const targetSwayPitch =
+      clampAbs(-fwdSpeed * MOVE_SWAY_PITCH_PER_MPS, MOVE_SWAY_MAX) * adsDamp;
+    const targetSwayRoll =
+      clampAbs(strafeSpeed * MOVE_SWAY_ROLL_PER_MPS, MOVE_SWAY_MAX) * adsDamp;
+    const targetSwayYaw =
+      clampAbs(-state.player.lookDeltaX * MOVE_SWAY_YAW_PER_PX, MOVE_SWAY_YAW_MAX) * adsDamp;
+
+    this.moveSwayPitchVel += (targetSwayPitch - this.viewmodel.swayPitch) * MOVE_SWAY_SPRING * dt;
+    this.moveSwayPitchVel *= Math.max(0, 1 - MOVE_SWAY_DAMP * dt);
+    this.viewmodel.swayPitch += this.moveSwayPitchVel * dt;
+
+    this.moveSwayRollVel += (targetSwayRoll - this.viewmodel.swayRoll) * MOVE_SWAY_SPRING * dt;
+    this.moveSwayRollVel *= Math.max(0, 1 - MOVE_SWAY_DAMP * dt);
+    this.viewmodel.swayRoll += this.moveSwayRollVel * dt;
+
+    this.moveSwayYawVel += (targetSwayYaw - this.viewmodel.swayYaw) * MOVE_SWAY_SPRING * dt;
+    this.moveSwayYawVel *= Math.max(0, 1 - MOVE_SWAY_DAMP * dt);
+    this.viewmodel.swayYaw += this.moveSwayYawVel * dt;
+
     // Scoped guns: past ~85% ADS the gun would sit inside the near plane —
     // hide it and let the HUD scope overlay take over (standard solution).
     const scoped = cfg.model.scope && w.ads > 0.85;
@@ -237,7 +292,16 @@ export class WeaponSystem {
 
     if (w.flashTtl > 0) {
       w.flashTtl -= dt;
-      if (w.flashTtl <= 0) this.viewmodel.setFlash(false);
+      if (w.flashTtl <= 0) {
+        w.flashTtl = 0;
+        this.viewmodel.setFlashIntensity(0);
+      } else {
+        // Full brightness for the hold window, then a squared falloff to
+        // zero — a fading ember instead of a binary on/off flash.
+        const holdFrom = FLASH_TTL - FLASH_HOLD_S;
+        const intensity = w.flashTtl >= holdFrom ? 1 : (w.flashTtl / FLASH_TTL) ** 2;
+        this.viewmodel.setFlashIntensity(intensity);
+      }
     }
 
     this.impacts.update(dt, state.player.yaw);
@@ -253,17 +317,20 @@ export class WeaponSystem {
     slot.ammo--;
     w.lastShotAt = nowS;
     w.flashTtl = FLASH_TTL;
-    this.viewmodel.setFlash(true);
+    this.viewmodel.setFlashIntensity(1);
 
-    // 2D recoil pattern (halved in ADS).
+    // 2D recoil pattern (halved in ADS), jittered so shots aren't
+    // bit-identical — one roll per shot applied to both axes keeps the
+    // kick direction coherent (pattern stays learnable).
     const step = cfg.recoilPattern[Math.min(this.patternIndex, cfg.recoilPattern.length - 1)];
     this.patternIndex++;
     const adsMult = 1 - w.ads * 0.35;
     if (step) {
-      w.recoilPitch += step[0] * adsMult;
-      this.recoilVelP += step[0] * 5;
-      w.recoilYaw += step[1] * adsMult;
-      this.recoilVelY += step[1] * 4;
+      const jitter = RECOIL_JITTER_MIN + Math.random() * (RECOIL_JITTER_MAX - RECOIL_JITTER_MIN);
+      w.recoilPitch += step[0] * adsMult * jitter;
+      this.recoilVelP += step[0] * 5 * jitter;
+      w.recoilYaw += step[1] * adsMult * jitter;
+      this.recoilVelY += step[1] * 4 * jitter;
     }
     this.viewmodel.kickZ = Math.min(0.08, this.viewmodel.kickZ + (cfg.pellets > 1 ? 0.055 : 0.035));
 

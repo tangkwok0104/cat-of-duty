@@ -44,6 +44,9 @@ export class CatSystem {
    *  field is not a cleared wave); spawnWave() arms it, the clear emit and
    *  restart() disarm it — so restart/death cleanup never fire the event. */
   private waveCleared = true;
+  /** Highest streak tier already emitted for the current combo chain — gates
+   *  score:streak to fire only on tier RISE, never per kill. */
+  private lastStreakTier = 0;
 
   constructor(private readonly scene: Scene) {
     this.projectiles = new CatProjectiles(scene);
@@ -405,8 +408,18 @@ export class CatSystem {
     const s = state.score;
     const now = performance.now() / 1000;
     if (now < s.comboEndsAt) s.combo = Math.min(8, s.combo + 1);
-    else s.combo = 1;
+    else {
+      s.combo = 1;
+      this.lastStreakTier = 0;
+    }
     s.comboEndsAt = now + 4;
+    // Streak tier: fires only on tier RISE within this chain (never per kill,
+    // never on a plain first kill at combo 1 — tier 0 there never beats 0).
+    const tier = s.combo >= 8 ? 3 : s.combo >= 4 ? 2 : s.combo >= 2 ? 1 : 0;
+    if (tier > this.lastStreakTier) {
+      this.lastStreakTier = tier;
+      bus.emit('score:streak', { tier: tier as 1 | 2 | 3, combo: s.combo });
+    }
     s.score += Math.round(100 * spec.scoreMult * (headshot ? 1.5 : 1) * s.combo);
     if (s.score > s.best) {
       s.best = s.score;
@@ -434,6 +447,7 @@ export class CatSystem {
     state.score.comboEndsAt = 0;
     state.score.shots = 0;
     state.score.hits = 0;
+    this.lastStreakTier = 0;
     this.waveTimer = 0;
     this.waveCleared = true; // restart cleanup must not read as a cleared wave
   }

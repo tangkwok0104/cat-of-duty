@@ -23,6 +23,38 @@ Deployed to Vercel production (project `cat-of-duty`, account tangkwok0104).
 screenshot. Stats overlay now hidden on non-local hosts (F3 toggles); menu
 hint fixed to "1-4 GUNS".
 
+## Wave 7 (2026-08-10 overnight) — gunfeel per AAA research (.tmp/research-aaa-feel.md)
+
+- **Hit-confirm audio tiers** (the research's #1 item): body = dry click,
+  headshot = distinct sharper timbre (not just louder), kill = low resolving
+  tone LAYERED on the hit cue (old standalone kill jingle repurposed into
+  the streak sting). Never throttled — per-hit information.
+- **Streak feedback** off the existing 4s combo detector (previously
+  invisible): DOUBLE SWAT ×2 / CLAW FRENZY ×4 / APEX PREDATOR ×8, centered
+  pop + rising sting, fires only on tier RISE per chain.
+- **Footsteps**: emitted at head-bob half-cycle crossings (audio locked to
+  the visual bob; cadence is distance-integrated so it scales with speed),
+  filtered-noise scuffs, crouch quieter/duller, sprint brighter, per-step
+  jitter.
+- **Viewmodel sway layer**: movement pitch/roll + turn yaw-lag with spring
+  overshoot-and-settle ("90% of gunfeel" per the Skövde thesis interviews),
+  ADS-damped; composed additively (rotation.y was free).
+- **Sprint FOV kick** +3.5° eased ~0.15s (sole fov writer, RenderSystem);
+  **recoil jitter** ±12% per shot (pattern stays learnable, shots stop
+  being bit-identical); **muzzle-flash ember** — binary 9→0 light replaced
+  with 20ms full + quadratic fade, TTL 50→75ms (frame-drop-proof);
+  **headshot-kill hit-stop** 40→70ms (body stays 40).
+
+Gates: tsc ×2, build, loop 14/14 ×2, perf 120fps / 9.6ms p95 / 145 draws.
+QA 6 PASS, 1 CONCERN, 0 FAIL — highlights: hit-stop proven by rAF position
+trace (bit-frozen 73-81ms on headshot kill); muzzle fade proven by CDP
+screencast luminance decay (screenshot API too slow at 490ms); streak pops
+pixel-evidenced at ×2 and ×4. CONCERN: sprint FOV pixel-proof below noise
+floor in static frames — needs human eyes. Needs one human pass: audio mix
+levels (footstep prominence, headshot tick over SMG stream) + sway/FOV feel.
+QA banked 5 new harness gotchas into project memory (60ms mouse-hold rule,
+CDP screencast for sub-100ms VFX, etc).
+
 ## Wave 6 (2026-08-10 overnight) — payload: 140MB → 15MB, wave-1 real cat, wedge fix
 
 **Payload** (`.tmp/optimize-glbs.mjs`, originals in `.tmp/gen/originals/` +

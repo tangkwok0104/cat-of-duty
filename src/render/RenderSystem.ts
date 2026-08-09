@@ -21,6 +21,14 @@ const _qb = new Quaternion();
 const _m = new Matrix4();
 const ONE = new Vector3(1, 1, 1);
 
+// Sprint FOV kick: a subtle widen while sprinting, eased in/out so it's
+// never a snap. ADS suppresses it entirely — aiming down sights while
+// "sprinting" is a visual non-event, and a widen fighting the ADS narrow
+// would read as a bug rather than a feel beat.
+const SPRINT_FOV_DEG = 3.5;
+const SPRINT_FOV_SPEED_THRESHOLD = 4;
+const SPRINT_FOV_EASE_RATE = 1 / 0.15; // ~0.15s ease
+
 /** Owns the scene + camera, applies interpolated physics transforms to the
  *  dynamic crate InstancedMesh, then runs CSM update and the post chain. */
 export class RenderSystem implements CameraPoser {
@@ -29,6 +37,8 @@ export class RenderSystem implements CameraPoser {
   private dynamicCrates: InstancedMesh | null = null;
   private lighting: Lighting | null = null;
   private postfx: PostFX | null = null;
+  /** Sprint FOV kick ease, 0..1 (see poseCamera). */
+  private sprintEase = 0;
 
   constructor(private readonly renderer: WebGLRenderer) {
     this.camera = new PerspectiveCamera(
@@ -140,8 +150,14 @@ export class RenderSystem implements CameraPoser {
       p.yaw + state.weapon.recoilYaw,
       0,
     );
-    // ADS narrows FOV toward the active gun's target.
-    const targetFov = t.baseFov + (state.weapon.adsFov - t.baseFov) * state.weapon.ads;
+    // ADS narrows FOV toward the active gun's target; sprinting widens it a
+    // touch on top, eased so the swap in/out of sprint isn't a snap.
+    const dt = state.perf.frameMs / 1000;
+    const sprintTarget = p.sprinting && p.speed2D > SPRINT_FOV_SPEED_THRESHOLD ? 1 : 0;
+    this.sprintEase += (sprintTarget - this.sprintEase) * Math.min(1, SPRINT_FOV_EASE_RATE * dt);
+    const sprintKick = SPRINT_FOV_DEG * this.sprintEase * (1 - state.weapon.ads);
+    const targetFov =
+      t.baseFov + (state.weapon.adsFov - t.baseFov) * state.weapon.ads + sprintKick;
     if (Math.abs(this.camera.fov - targetFov) > 0.01) {
       this.camera.fov = targetFov;
       this.camera.updateProjectionMatrix();

@@ -201,8 +201,11 @@ export class SoundBus {
       }
     });
     bus.on('enemy:hit', ({ killed, part }) => {
-      if (killed) this.kill();
-      else this.hit(part === 'head');
+      // Hit-confirm tiers: the body/headshot timbre always fires first —
+      // killLayer() only ADDS a resolving low tone on top of it, it never
+      // replaces it, so a killing headshot still sounds like a headshot.
+      this.hit(part === 'head');
+      if (killed) this.killLayer();
     });
     // A projectile hitting the player routes through player:damaged too, so
     // it reuses the same hurt grunt as melee — no separate impact sound.
@@ -218,6 +221,8 @@ export class SoundBus {
     });
     bus.on('pickup:collected', ({ kind }) => this.pickup(kind));
     bus.on('weapon:acquired', () => this.weaponAcquired());
+    bus.on('player:footstep', ({ sprinting, crouching }) => this.footstep(sprinting, crouching));
+    bus.on('score:streak', ({ tier }) => this.streakSting(tier));
 
     // --- recorded cat vocals (M-audio pass) ------------------------------
     // Distance attenuation note: 'enemy:windup' carries x/z, but SoundBus is
@@ -426,15 +431,58 @@ export class SoundBus {
     thump.stop(t + 0.12);
   }
 
-  /** Hitmarker tick — brighter for headshots. */
+  /** Hit-confirm tiers (research-backed load-bearing feedback, see
+   *  .tmp/research-aaa-feel.md §1/§2). Body and headshot get genuinely
+   *  different timbres — not the same click just pitched up — so the ear
+   *  can tell them apart without looking at the on-screen hitmarker. */
   private hit(head: boolean): void {
-    this.click(head ? 2400 : 1800, 0.035, 0.5);
+    if (head) this.hitHeadshot();
+    else this.hitBody();
   }
 
-  /** Kill: crisp two-note rising confirm. */
-  private kill(): void {
-    this.tone(880, 0.05, 0.45, 'square');
-    setTimeout(() => this.tone(1320, 0.07, 0.45, 'square'), 45);
+  /** Body hit: short dry click/thud, mid frequency. Gain sits in the
+   *  GAIN_UI_DING neighbourhood per the mix-pass spec — audible over
+   *  gunfire, not fatiguing at SMG fire rates. No retrigger throttle here
+   *  on purpose: hit-confirms are per-hit information and must never be
+   *  dropped during rapid fire. */
+  private hitBody(): void {
+    this.click(900, 0.035, 0.5);
+  }
+
+  /** Headshot: sharper, brighter percussive tick. Built as a highpassed
+   *  noise transient (not just a higher-pitched click) with a thin tone
+   *  layered on top for pitch identity — a genuinely different timbre from
+   *  hitBody(), not the same cue turned up. */
+  private hitHeadshot(): void {
+    const ctx = this.ctx;
+    const out = this.master;
+    if (!ctx || !out) return;
+    const t = this.now();
+    const len = 0.02;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 4200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.55, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    noise.connect(hp).connect(g).connect(out);
+    noise.start(t);
+    this.tone(2600, 0.02, 0.35, 'square');
+  }
+
+  /** Kill layer: short resolving low tone with a slight downward pitch,
+   *  layered ON TOP of whichever hit() cue just fired above (see the
+   *  enemy:hit handler) — never a replacement, so a killing headshot still
+   *  reads as a headshot with this added underneath. */
+  private killLayer(): void {
+    this.tone(220, 0.1, 0.4, 'sine', 150);
   }
 
   /** Enemy windup telegraph fallback (chirp-alert decode failed/pending):
@@ -499,6 +547,55 @@ export class SoundBus {
     this.tone(660, 0.07, GAIN_UI_DING * 0.9, 'square', 880);
     setTimeout(() => this.tone(990, 0.07, GAIN_UI_DING * 0.9, 'square'), 70);
     setTimeout(() => this.tone(1320, 0.12, GAIN_UI_DING, 'square', 1760), 140);
+  }
+
+  /** Footstep scuff: short filtered-noise burst, subtle background texture
+   *  — not meant to be consciously tracked, just presence under the player.
+   *  Crouching drops to about half gain and a duller filter (sneaking
+   *  should sound like sneaking); sprinting nudges gain and brightness up.
+   *  Cutoff + gain both get a small per-step jitter so a steady run cadence
+   *  never resolves into an obviously looped one-shot. */
+  private footstep(sprinting: boolean, crouching: boolean): void {
+    const ctx = this.ctx;
+    const out = this.master;
+    if (!ctx || !out) return;
+    const t = this.now();
+    const len = 0.05 + Math.random() * 0.02; // 50-70ms
+    const baseVol = 0.14;
+    const vol =
+      (crouching ? baseVol * 0.5 : sprinting ? baseVol * 1.25 : baseVol) * (0.85 + Math.random() * 0.3);
+    const lpBase = crouching ? 1400 : sprinting ? 3200 : 2200;
+    const lp = lpBase * (0.9 + Math.random() * 0.2);
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = lp;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    noise.connect(filter).connect(g).connect(out);
+    noise.start(t);
+  }
+
+  /** Streak sting: rising two-note synth cue on a kill-chain tier RISE
+   *  (the bus only fires this on tier increase, never per-kill — see
+   *  EventBus's 'score:streak' doc). Reuses the shape the old kill-confirm
+   *  cue used (rising two-note, x1.5 the anchor freq) since it already read
+   *  as "escalating" — just tier-scaled: higher anchor pitch and, at tier
+   *  3, a brighter waveform, so the biggest chain doesn't just sound like
+   *  the same twinkle turned up. */
+  private streakSting(tier: 1 | 2 | 3): void {
+    const anchor = 660 + (tier - 1) * 220; // 660 / 880 / 1100
+    const type: OscillatorType = tier === 3 ? 'sawtooth' : 'square';
+    const vol = 0.4 + (tier - 1) * 0.05;
+    this.tone(anchor, 0.05, vol, type);
+    setTimeout(() => this.tone(anchor * 1.5, 0.07, vol, type), 45);
   }
 
   /** Player hurt: short low grunt. */
