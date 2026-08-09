@@ -175,8 +175,11 @@ export function buildCatVisual(id: number, archetype: EnemyArchetype): CatVisual
   headMesh.castShadow = true;
   headMesh.receiveShadow = false;
 
+  // Only torso + head cast shadows — tail/legs are shadow-invisible at
+  // gameplay distance, and 7 casters/cat × 8 cats × 2 CSM cascades was the
+  // in-combat draw-call blowout (305 seen vs the 150 budget).
   const tailMesh = new Mesh(TAIL_GEO, assets.vestMat);
-  tailMesh.castShadow = true;
+  tailMesh.castShadow = false;
   tailMesh.receiveShadow = false;
 
   const legFL = new Mesh(LEG_GEO, assets.furMat);
@@ -189,7 +192,7 @@ export function buildCatVisual(id: number, archetype: EnemyArchetype): CatVisual
     const hip = LEG_HIP[i];
     if (!leg || !hip) continue; // unreachable — both arrays are fixed-length 4
     leg.position.set(hip[0], hip[1], hip[2]);
-    leg.castShadow = true;
+    leg.castShadow = false;
     leg.receiveShadow = false;
   }
 
