@@ -17,3 +17,8 @@ commercial game. Log every asset here as it is added.
 | `public/assets/gen/models/sandbags.glb` | Arena prop | Same pipeline, 2026-08-09 | Original generated content |
 | `public/assets/gen/models/crate.glb` | Arena prop (ammo crate) | Same pipeline, 2026-08-09 | Original generated content |
 | `public/assets/gen/models/catsoldier.glb` | Cat soldier character (auto-rigged) | Generated via Higgsfield (Nano Banana image → Meshy image-to-3D + rigging) on project owner's account, 2026-08-09 | Original generated content |
+| `public/assets/gen/models/catsoldier-walk.glb` | Cat soldier + walk clip (Meshy action 30) | Same pipeline + Meshy 3D-rigging, 2026-08-09 | Original generated content |
+| `public/assets/gen/models/catsoldier-idle.glb` | Cat soldier + idle clip (Meshy action 0) | Same pipeline + Meshy 3D-rigging, 2026-08-09 | Original generated content |
+| `public/assets/gen/models/catsoldier-death-back.glb` / `-death-fwd.glb` | Death clips (Meshy actions 183/184) | Same pipeline, 2026-08-09 | Original generated content |
+| `public/assets/gen/models/catsoldier-hit.glb` / `-attack.glb` / `-run.glb` | Hit-react / melee swipe / in-place run clips (Meshy actions 178/96/657) | Same pipeline, 2026-08-09 | Original generated content |
+| `public/assets/gen/audio/*.mp3` (6: battle meow, hiss, death yowl, heavy growl, alert chirp, victory meow) | Cat vocal SFX | Generated via Higgsfield (Mirelo text-to-audio) on project owner's account, 2026-08-09 | Original generated content |
