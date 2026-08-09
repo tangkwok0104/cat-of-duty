@@ -20,10 +20,22 @@ North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
 ## ▶ NEXT SESSION STARTS HERE (checkpoint 2026-08-10)
 
-**State:** live at https://cat-of-duty.vercel.app · branch `m0-scaffold` =
-`main` = `dd94021` · working tree clean · all gates green (tsc ×2, build,
-loop-integrity 14/14 ×6, perf 120fps / ~9ms p95 / 145 draws).
-No git remote — local only; Vercel deploys straight from the working copy.
+**State:** live at https://cat-of-duty.vercel.app · **public source at
+https://github.com/tangkwok0104/cat-of-duty** · branch `m0-scaffold` = `main`
+· working tree clean · all gates green (tsc ×2, build, loop-integrity 14/14
+×6, perf 120fps / ~9ms p95 / 145 draws).
+
+**Publishing setup (2026-08-10):** history rewritten with `git-filter-repo` to
+strip superseded >3MB model blobs — all 26 commits kept, push payload 14MB
+(was ~150MB). Local `.git` is still ~86MB because the detached worktree at
+`.tmp/play-checkpoint` pins old objects; harmless, leave it. Code is
+**PolyForm Noncommercial 1.0.0** (NOT MIT — Anson wants no commercial use);
+generated assets rights-reserved on top (`LICENSE-ASSETS.md`).
+
+**Two-step publish from now on:** `git push origin main` (GitHub) AND
+`vercel --prod --yes` (the Vercel project is CLI-deployed, not git-linked —
+pushing alone does NOT deploy). Work on `m0-scaffold`, fast-forward `main`,
+push `main`; only `main` exists on GitHub.
 
 ### 1. DECISIONS OWED BY ANSON (ask these first, as one numbered menu)
 
