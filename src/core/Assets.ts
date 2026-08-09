@@ -6,6 +6,7 @@ import {
 } from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 export interface PbrMaps {
   map: Texture;
@@ -80,6 +81,9 @@ export async function loadHdri(onProgress: (label: string) => void): Promise<Tex
  *  apply an explicit scale; the file's own size is not meters. */
 const MODEL_ROOT = '/assets/gen/models';
 const gltfLoader = new GLTFLoader();
+// Wave-6 payload pass rewrote every GLB with EXT_meshopt_compression
+// (required, not optional) — loads hard-fail without this decoder.
+gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 const modelCache = new Map<string, Promise<GLTF>>();
 
 export function loadModel(name: string): Promise<GLTF> {
@@ -89,4 +93,27 @@ export function loadModel(name: string): Promise<GLTF> {
     modelCache.set(name, p);
   }
   return p;
+}
+
+/** Everything a first wave needs to look right: the rigged cat + its
+ *  locomotion set (via CatVisual's own Promise.all — imported lazily there),
+ *  the starting rifle, and the paw grip. The menu gates DEPLOY on this so a
+ *  stranger's first cat is the real cat, never the untextured proxy
+ *  (wave-5 QA finding). Post-compression this is ~1.5MB total, so the gate
+ *  costs a breath, not a wait. */
+export function preloadCritical(onProgress: (done: number, total: number) => void): Promise<void> {
+  const names = [
+    'catsoldier', 'catsoldier-walk', 'catsoldier-idle', 'catsoldier-run',
+    'catsoldier-attack', 'catsoldier-hit', 'catsoldier-death-back',
+    'catsoldier-death-fwd', 'rifle', 'paw',
+  ];
+  let done = 0;
+  onProgress(0, names.length);
+  return Promise.all(
+    names.map((n) =>
+      loadModel(n)
+        .catch(() => null) // a missing optional clip degrades, never blocks deploy
+        .then(() => onProgress(++done, names.length)),
+    ),
+  ).then(() => undefined);
 }

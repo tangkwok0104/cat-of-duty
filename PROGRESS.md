@@ -23,6 +23,37 @@ Deployed to Vercel production (project `cat-of-duty`, account tangkwok0104).
 screenshot. Stats overlay now hidden on non-local hosts (F3 toggles); menu
 hint fixed to "1-4 GUNS".
 
+## Wave 6 (2026-08-10 overnight) — payload: 140MB → 15MB, wave-1 real cat, wedge fix
+
+**Payload** (`.tmp/optimize-glbs.mjs`, originals in `.tmp/gen/originals/` +
+git history): the 7 cat animation GLBs each carried a full duplicate of the
+skinned mesh + 2048 texture — stripped to skeleton + clip only (7.6MB →
+0.04MB each). All meshes meshopt-compressed + quantized, textures 1024 WebP
+(catsoldier 7.1→0.39MB, rifle 11→0.66MB, props ~10→0.4MB). Total
+`public/assets` 140MB → 15MB. MeshoptDecoder wired in Assets.ts (the new
+files REQUIRE it). Rig verified structurally (1 skin/26 nodes/anims intact)
+and visually (crisp tabby, clean stride, no quantization artifacts).
+
+**Wave-1 real cat** (wave-5 QA finding): DEPLOY button now gates on
+`preloadCritical` (cat + all clips + rifle + paw, ~1.5MB post-compression)
+with a LOADING % readout — a stranger's first enemy is the real cat, never
+the untextured proxy. Fallback releases the button on any load failure.
+
+**Cat-wedging bug (wave-5 regression, mine).** First compressed-asset loop
+run failed 10/14; a single-sample A/B (originals passed once) pointed at
+the assets — WRONG, both were flake. A 40s position-sampling probe caught
+the truth: cats from the new ±17 corner spawns aim exactly through the
+±6,±6 pillars, and straight-line seek + collider push-out wedges them at
+r≈9.3 forever (player-facing bug: waves stall). Fix = class fix in
+CatSystem seek: wedge detector (intended vs actual displacement, 0.7s
+threshold) + 0.8s tangential detour, side fixed per cat (persistent
+same-side rounding always clears a convex box; alternating can ping-pong).
+Lesson logged: a flaky failure needs N runs before an A/B means anything.
+
+Gates: tsc ×2, build green, loop 14/14 **×3 consecutive** (flake class
+demands repetition), HUD/auto-reload/banner asserts 8/8, cat visual pass.
+Deployed.
+
 ## Combat Wave 5 (2026-08-10 overnight) — the playtest-feedback wave
 
 All of Anson's playtest complaints, built by a 5-builder workflow on

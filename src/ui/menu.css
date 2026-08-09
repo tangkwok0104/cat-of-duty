@@ -133,6 +133,13 @@
   filter: brightness(1.08);
 }
 
+.menu-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+  filter: saturate(0.4);
+  transform: none;
+}
+
 .menu-settings {
   display: flex;
   flex-direction: column;

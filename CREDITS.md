@@ -26,3 +26,5 @@ commercial game. Log every asset here as it is added.
 | `public/assets/gen/models/smg.glb` | PURR-90 viewmodel mesh | Recraft V4.1 image → Meshy image-to-3D, 2026-08-09 | Original generated content |
 | `public/assets/gen/ui/menu-keyart.png` + `logo.svg` | Menu key art + stencil logo | Nano Banana / Recraft V4.1 vector, 2026-08-09 | Original generated content |
 | `public/assets/gen/models/paw.glb` | Cat paw + forearm viewmodel grip prop (all 4 guns) | Same pipeline (generated image → Meshy image-to-3D), 2026-08-09 | Original generated content |
+
+> 2026-08-10 payload pass: every model above re-encoded in place (gltf-transform — clip files stripped to skeleton+animation only, meshes meshopt-compressed + quantized, textures resized to 1024 WebP). Same source generations, same licenses; pre-compression originals preserved in git history.

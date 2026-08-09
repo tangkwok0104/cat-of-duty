@@ -1,5 +1,6 @@
 import type { GameState, QualityTier } from '../core/GameState';
 import type { QualityControl } from '../core/Capabilities';
+import { preloadCritical } from '../core/Assets';
 
 export interface MenuCallbacks {
   /** Request pointer lock (deploy/resume). */
@@ -75,10 +76,32 @@ export class Menu {
         </div>
       </div>`;
 
-    this.root.querySelector('#menu-deploy')?.addEventListener('click', () => {
+    const deployBtn = this.root.querySelector('#menu-deploy') as HTMLButtonElement | null;
+    deployBtn?.addEventListener('click', () => {
       this.deployed = true;
       this.cb.lock();
     });
+    // Gate the first DEPLOY on the critical asset set (rigged cat + clips +
+    // rifle + paw) so the first enemy a stranger meets is the real cat, not
+    // the untextured proxy (wave-5 QA finding). ~1.5MB post-compression, so
+    // this reads as a blink of "LOADING" on any reasonable connection.
+    if (deployBtn) {
+      deployBtn.disabled = true;
+      preloadCritical((done, total) => {
+        if (!deployBtn.disabled) return; // already released
+        deployBtn.textContent = `LOADING ${Math.round((done / total) * 100)}%`;
+      })
+        .then(() => {
+          deployBtn.disabled = false;
+          deployBtn.textContent = this.deployed ? 'RESUME' : 'DEPLOY';
+        })
+        .catch(() => {
+          // Never strand the player on a menu — worst case they meet the
+          // proxy cat like everyone did before wave 6.
+          deployBtn.disabled = false;
+          deployBtn.textContent = 'DEPLOY';
+        });
+    }
 
     const sens = this.root.querySelector('#set-sens') as HTMLInputElement | null;
     sens?.addEventListener('input', () => {

@@ -131,9 +131,21 @@ export class CatSystem {
           bus.emit('player:damaged', { amount: spec.meleeDamage, fromX: cat.x, fromZ: cat.z });
         }
       } else if (!spec.ranged || dist > spec.ranged.fireRange) {
-        // Seek + separation (no navmesh by design — slice spec).
-        let mx = (dx / dist) * cat.speed;
-        let mz = (dz / dist) * cat.speed;
+        // Seek + separation (no navmesh by design — slice spec). Straight-line
+        // seek can wedge on a collider face (seek pushes in, resolveObstacles
+        // pushes out, net zero — cats from the ±17 corner spawns aim exactly
+        // through the ±6,±6 pillars, caught by wave-6 diagnosis). Detour:
+        // when progress stalls, swing tangentially for a beat, then re-seek.
+        let mx: number;
+        let mz: number;
+        if (cat.detourT > 0) {
+          cat.detourT -= dt;
+          mx = ((dx / dist) * 0.35 + -(dz / dist) * cat.detourSide) * cat.speed;
+          mz = ((dz / dist) * 0.35 + (dx / dist) * cat.detourSide) * cat.speed;
+        } else {
+          mx = (dx / dist) * cat.speed;
+          mz = (dz / dist) * cat.speed;
+        }
         for (const other of state.cats) {
           if (other === cat || other.phase !== 'alive') continue;
           const sx = cat.x - other.x;
@@ -145,11 +157,30 @@ export class CatSystem {
             mz += (sz / sd) * push * 2.2;
           }
         }
+        const wedgeCheckX = cat.x;
+        const wedgeCheckZ = cat.z;
         cat.x += mx * dt;
         cat.z += mz * dt;
         this.resolveObstacles(cat, state);
         cat.x = Math.max(-ARENA_CLAMP, Math.min(ARENA_CLAMP, cat.x));
         cat.z = Math.max(-ARENA_CLAMP, Math.min(ARENA_CLAMP, cat.z));
+        // Wedge detector: wanted to move at cat.speed, actually crawled.
+        const movedSq =
+          (cat.x - wedgeCheckX) * (cat.x - wedgeCheckX) +
+          (cat.z - wedgeCheckZ) * (cat.z - wedgeCheckZ);
+        const intended = cat.speed * dt;
+        if (movedSq < intended * intended * 0.06 && dist > spec.meleeRange + 0.5) {
+          cat.stuckT += dt;
+          if (cat.stuckT >= 0.7 && cat.detourT <= 0) {
+            // Side stays fixed per cat (rolled at spawn): persistently
+            // rounding the same way always clears a convex box eventually,
+            // where alternating can ping-pong at a long wall's midpoint.
+            cat.detourT = 0.8; // ~2m of tangential travel at rusher speed
+            cat.stuckT = 0;
+          }
+        } else {
+          cat.stuckT = Math.max(0, cat.stuckT - dt * 2);
+        }
       } else {
         // Gunner, inside fire range, beyond melee range: hold the preferred
         // distance and strafe. The windup/fire state machine below runs
@@ -345,6 +376,9 @@ export class CatSystem {
         burstTimer: 0,
         strafeDir: Math.random() < 0.5 ? -1 : 1,
         strafeTimer: 1.2 + Math.random() * 1.0,
+        stuckT: 0,
+        detourT: 0,
+        detourSide: Math.random() < 0.5 ? -1 : 1,
         deadFor: 0,
         meleeAnim: 0,
         deathStyle: 0,

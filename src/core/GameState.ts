@@ -214,6 +214,15 @@ export interface CatData {
   strafeDir: 1 | -1;
   /** Seconds until the strafe direction may flip. */
   strafeTimer: number;
+  /** Seconds a seeking cat has been wedged (intending to close but barely
+   *  moving — obstacle push-out cancelling straight-line seek). */
+  stuckT: number;
+  /** Seconds left on a tangential detour around whatever wedged the cat. */
+  detourT: number;
+  /** Which side this cat's detours swing (fixed at spawn — persistently
+   *  rounding one way always clears a convex obstacle, where alternating
+   *  can ping-pong at a long wall's midpoint). */
+  detourSide: 1 | -1;
   /** Wall-clock seconds since death (drives fall-over + despawn). */
   deadFor: number;
   /** Seconds of melee-swipe animation remaining (set by CatSystem when a
