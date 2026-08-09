@@ -17,6 +17,7 @@ import { CatSystem } from './enemies/CatSystem';
 import { CatOverlays } from './enemies/CatOverlays';
 import { Pickups } from './gameplay/Pickups';
 import { WeaponPickups } from './gameplay/WeaponPickups';
+import { Upgrades } from './gameplay/Upgrades';
 import { Hud } from './ui/Hud';
 import { Menu } from './ui/Menu';
 import { SoundBus } from './audio/SoundBus';
@@ -75,6 +76,9 @@ async function boot(): Promise<void> {
   const player = new PlayerController(input);
   const cameraFeel = new CameraFeel();
   const health = new Health();
+  // Field-promotion economy (wave-8): purely event-driven (bus + state), so
+  // it needs no per-frame call and doesn't join the Loop's fixedStep array.
+  new Upgrades(state);
   const weapon = new WeaponSystem(input, physics, renderSys.camera, renderSys.scene);
   weapon.arm(state);
   postfx.addBloomMeshes(weapon.bloomMeshes);

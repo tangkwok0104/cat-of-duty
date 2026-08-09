@@ -2,6 +2,7 @@ import type { GameState, CatArchetype } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import { ARCHETYPES } from '../enemies/EnemyConfig';
 import { WEAPONS } from '../weapons/WeaponConfig';
+import { effectiveMaxHp } from '../player/Health';
 
 const REFRESH_MS = 100;
 // Minimap world→pixel: half-extent of the play area plus a small margin so
@@ -16,6 +17,24 @@ const STREAK_LABELS: Record<1 | 2 | 3, string> = {
   2: 'CLAW FRENZY',
   3: 'APEX PREDATOR',
 };
+
+type PromoId = 'claws' | 'pockets' | 'lives';
+
+// Promotion chip catalog for display only — key hint, label, and per-level
+// cost. These 9 numbers duplicate the economy spec (the purchase logic that
+// actually spends TUNA lives elsewhere); if the schedule ever changes, keep
+// both in sync. Max level 3 for all three.
+const PROMO_CATALOG: {
+  id: PromoId;
+  key: string;
+  label: string;
+  levelKey: 'clawsLvl' | 'pocketsLvl' | 'livesLvl';
+  costs: readonly [number, number, number];
+}[] = [
+  { id: 'claws', key: 'Z', label: 'CLAW SHARPENING', levelKey: 'clawsLvl', costs: [50, 75, 100] },
+  { id: 'pockets', key: 'X', label: 'DEEP POCKETS', levelKey: 'pocketsLvl', costs: [40, 60, 80] },
+  { id: 'lives', key: 'V', label: 'NINE LIVES', levelKey: 'livesLvl', costs: [60, 90, 120] },
+];
 
 /** Slice HUD: crosshair with live spread, ammo, health bar, kills/wave,
  *  hitmarker (white hit / red kill), damage vignette, death screen.
@@ -69,14 +88,19 @@ export class Hud {
     });
     bus.on('player:died', () => this.setDead(true));
     bus.on('game:restart', () => this.setDead(false));
-    bus.on('wave:started', ({ wave }) => {
-      this.waveToast(wave);
+    bus.on('wave:started', ({ wave, special }) => {
+      this.waveToast(wave, special);
       this.hideBreather();
     });
     bus.on('wave:cleared', ({ wave, breatherS }) => this.showBreather(wave, breatherS));
     // Fires only on tier RISE (never per kill) — no debounce/queue needed,
     // the pop just plays immediately on each rise within the combo window.
     bus.on('score:streak', ({ tier, combo }) => this.streakPop(tier, combo));
+    // Promotion chips: purchase flashes the chip, denial shakes it. The pip
+    // fill / cost / affordability text itself refreshes off GameState in the
+    // throttled frame() block — same idiom as the arsenal pips above.
+    bus.on('upgrade:purchased', ({ id }) => this.flashPromoChip(id));
+    bus.on('upgrade:denied', ({ id }) => this.denyPromoChip(id));
   }
 
   private build(): void {
@@ -177,21 +201,63 @@ export class Hud {
     // right where the player's eye already is.
     make('hud-reload-prompt', 'hud-reload-prompt', this.root);
 
-    // Top-right: kills + wave.
+    // Top-right: kills + wave + TUNA (upgrade currency, wave 8 economy).
     const score = make('hud-score', 'hud-score', this.root);
     const kills = document.createElement('div');
     kills.className = 'score-kills';
     const wave = document.createElement('div');
     wave.className = 'score-wave';
-    score.append(kills, wave);
+    const tuna = document.createElement('div');
+    tuna.className = 'score-tuna';
+    score.append(kills, wave, tuna);
     this.els['score-kills'] = kills;
     this.els['score-wave'] = wave;
+    this.els['score-tuna'] = tuna;
 
     make('wave-toast', 'wave-toast', this.root);
     make('acquire-toast', 'acquire-toast', this.root);
     // Persistent breather countdown — distinct lifecycle from wave-toast
     // (that one fires-and-fades; this one lives for the whole breather).
     make('intermission-banner', 'intermission-banner', this.root);
+
+    // Promotion chips: a sibling of the banner, not a child — the banner's
+    // countdown text is set via .textContent each throttled tick, which
+    // would wipe any children living inside it. Shown/hidden together with
+    // the banner (see showBreather/hideBreather); pip fill + cost text +
+    // afford state refresh from GameState every throttled frame.
+    const chips = make('promo-chips', 'promo-chips', this.root);
+    for (const def of PROMO_CATALOG) {
+      const chip = document.createElement('div');
+      chip.className = 'promo-chip';
+      const top = document.createElement('div');
+      top.className = 'promo-chip-top';
+      const key = document.createElement('span');
+      key.className = 'promo-key';
+      key.textContent = `[${def.key}]`;
+      const label = document.createElement('span');
+      label.className = 'promo-label';
+      label.textContent = def.label;
+      const sep = document.createElement('span');
+      sep.className = 'promo-sep';
+      sep.textContent = '·'; // middle dot
+      const cost = document.createElement('span');
+      cost.className = 'promo-cost';
+      cost.textContent = String(def.costs[0]);
+      top.append(key, label, sep, cost);
+      const pipsRow = document.createElement('div');
+      pipsRow.className = 'promo-pips';
+      for (let i = 0; i < 3; i++) {
+        const pip = document.createElement('span');
+        pip.className = 'promo-pip';
+        pipsRow.append(pip);
+        this.els[`promo-${def.id}-pip-${i}`] = pip;
+      }
+      chip.append(top, pipsRow);
+      chips.append(chip);
+      this.els[`promo-${def.id}`] = chip;
+      this.els[`promo-${def.id}-cost`] = cost;
+    }
+
     make('damage-vignette', 'damage-vignette', this.root);
 
     // Sniper scope overlay: circular mask + star reticle, shown when scoped.
@@ -313,13 +379,61 @@ export class Hud {
     el.classList.add(`streak-tier-${tier}`, 'pop-play');
   }
 
-  private waveToast(wave: number): void {
+  /** `special` = every-5th heavy-drop wave (pre-announced in wave:started) —
+   *  same rise-and-fade toast, danger-red variant with a callout string. */
+  private waveToast(wave: number, special: boolean): void {
     const t = this.els['wave-toast'];
     if (!t) return;
-    t.textContent = `WAVE ${wave}`;
+    t.textContent = special ? `⚠ HEAVY DROP — WAVE ${wave}` : `WAVE ${wave}`;
+    t.classList.toggle('toast-danger', special);
     t.classList.remove('toast-play');
     void t.offsetWidth;
     t.classList.add('toast-play');
+  }
+
+  /** Pip fill + next-level cost + afford state, read fresh from GameState
+   *  each throttled tick — same "state is truth" idiom as the arsenal pips. */
+  private refreshPromoChips(state: GameState): void {
+    const tuna = state.upgrades.tuna;
+    for (const def of PROMO_CATALOG) {
+      const chip = this.els[`promo-${def.id}`];
+      const costEl = this.els[`promo-${def.id}-cost`];
+      if (!chip || !costEl) continue;
+      const lvl = state.upgrades[def.levelKey];
+      const maxed = lvl >= 3;
+      // lvl is always 0-2 here (maxed is the >=3 case above) so the index is
+      // always in range — the `?? 0` only satisfies noUncheckedIndexedAccess,
+      // it never actually fires.
+      const nextCost = maxed ? 0 : (def.costs[lvl] ?? 0);
+      const affordable = !maxed && tuna >= nextCost;
+      chip.classList.toggle('promo-maxed', maxed);
+      chip.classList.toggle('promo-affordable', affordable);
+      chip.classList.toggle('promo-unaffordable', !maxed && !affordable);
+      costEl.textContent = maxed ? 'MAX' : String(nextCost);
+      for (let i = 0; i < 3; i++) {
+        this.els[`promo-${def.id}-pip-${i}`]?.classList.toggle('promo-pip-filled', i < lvl);
+      }
+    }
+  }
+
+  /** Purchase landed: quick accent flash on the chip. */
+  private flashPromoChip(id: PromoId): void {
+    const chip = this.els[`promo-${id}`];
+    if (!chip) return;
+    chip.classList.remove('promo-flash');
+    void chip.offsetWidth; // restart the CSS animation
+    chip.classList.add('promo-flash');
+  }
+
+  /** Purchase rejected (no tuna / maxed / intermission closed): reuses the
+   *  arsenal chip's deny-shake pattern so the two feedbacks read as one
+   *  language. */
+  private denyPromoChip(id: PromoId): void {
+    const chip = this.els[`promo-${id}`];
+    if (!chip) return;
+    chip.classList.remove('promo-deny');
+    void chip.offsetWidth; // restart the CSS animation
+    chip.classList.add('promo-deny');
   }
 
   /** Field just cleared: arm the countdown and play the banner in. The
@@ -335,11 +449,13 @@ export class Hud {
     el.classList.remove('ib-play');
     void el.offsetWidth; // restart the reappear animation
     el.classList.add('ib-play');
+    this.els['promo-chips']?.classList.add('promo-visible');
   }
 
   private hideBreather(): void {
     this.breatherDeadline = 0;
     this.els['intermission-banner']?.classList.remove('ib-visible');
+    this.els['promo-chips']?.classList.remove('promo-visible');
   }
 
   private setDead(dead: boolean): void {
@@ -505,11 +621,18 @@ export class Hud {
         banner.textContent = `WAVE ${this.breatherWave} CLEARED — NEXT WAVE IN ${Math.ceil(remainingS)}`;
       }
     }
+    // Unconditionally (not just while the banner is up): pips/costs must
+    // also reset the moment a death-restart zeroes the levels (QA FAIL #7 —
+    // chips showed stale pips after R until the next intermission).
+    this.refreshPromoChips(state);
 
+    // Divide by the EFFECTIVE cap, not 100 — with NINE LIVES raising max hp
+    // to 125, a /100 bar reads full from 100-125 and hides real damage.
+    const hpMax = effectiveMaxHp(state);
     const hpW = Math.round(state.health.hp);
     if (hpW !== this.lastHpWidth) {
       this.lastHpWidth = hpW;
-      this.els['hp-fill']?.style.setProperty('transform', `scaleX(${hpW / 100})`);
+      this.els['hp-fill']?.style.setProperty('transform', `scaleX(${hpW / hpMax})`);
       this.els['hp-fill']?.classList.toggle('hp-low', hpW <= 30);
     }
     // Low-health vignette intensity steps (avoid style churn per frame).
@@ -532,5 +655,7 @@ export class Hud {
           ? `WAVE ${s.wave} · ${s.catsAlive} HOSTILE · ${s.kills} KILLS`
           : 'STANDBY';
     }
+    const tuna = this.els['score-tuna'];
+    if (tuna) tuna.textContent = `TUNA ${state.upgrades.tuna}`;
   }
 }

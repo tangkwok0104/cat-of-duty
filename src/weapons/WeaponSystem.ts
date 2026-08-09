@@ -345,6 +345,13 @@ export class WeaponSystem {
     const spreadDeg = cfg.spreadHipDeg + (cfg.spreadAdsDeg - cfg.spreadHipDeg) * w.ads;
     const spreadRad = (spreadDeg * Math.PI) / 180;
 
+    // CLAW SHARPENING (wave-8): +10% weapon damage per level, applied at the
+    // single site below where cat damage is computed (covers hitscan and
+    // shotgun pellets alike, since both go through this per-pellet loop).
+    // clawsLvl 0 → ×1 exactly (IEEE-754 mult by 1 is exact) — zero purchases
+    // stay bit-identical to pre-wave-8 damage numbers.
+    const clawsMult = 1 + 0.1 * state.upgrades.clawsLvl;
+
     // Aggregate damage per cat per trigger pull → one hit event per cat.
     let totalOnCat = 0;
     let catId = -1;
@@ -389,7 +396,11 @@ export class WeaponSystem {
             const dist = Math.hypot(_hit.px - o.x, _hit.py - o.y, _hit.pz - o.z);
             const head = enemy.part === 'head';
             const dmg =
-              cfg.damage * falloffMult(cfg, dist) * (head ? cfg.headshotMult : 1) * damageMult;
+              cfg.damage *
+              falloffMult(cfg, dist) *
+              (head ? cfg.headshotMult : 1) *
+              damageMult *
+              clawsMult;
             if (cat.id !== catId && catId !== -1 && totalOnCat > 0) {
               this.applyDamage(state, catId, catPart, totalOnCat);
               totalOnCat = 0;

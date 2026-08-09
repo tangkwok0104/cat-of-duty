@@ -23,6 +23,41 @@ Deployed to Vercel production (project `cat-of-duty`, account tangkwok0104).
 screenshot. Stats overlay now hidden on non-local hosts (F3 toggles); menu
 hint fixed to "1-4 GUNS".
 
+## Wave 8 (2026-08-10 overnight) — TUNA economy, special waves, real SFX, steering class-fix
+
+**Field promotions** (research §3: the missing player-power ramp). Kills earn
+TUNA (10 / 20 heavy / +5 headshot). During the 7s intermission ONLY: Z =
+CLAW SHARPENING (+10% dmg/lvl, 50/75/100), X = DEEP POCKETS (+1 mag reserve
+cap/lvl + 1 mag now, 40/60/80), V = NINE LIVES (+25 max hp/lvl + heal now,
+60/90/120; V not C — QA caught C double-bound to crouch). Max lvl 3, all
+reset on restart. HUD: TUNA counter, promo chips with level pips /
+affordability states / deny shake, hp bar divides by the EFFECTIVE max (a
+/100 bar read full from 100-125). Zero-purchase invariant proven: the gate
+quoted the harness's exact numbers unchanged (18→30 reload, 6/24 shotgun,
+hp 100→90 contact). **Special waves**: every 5th = HEAVY DROP (+2 heavies,
+red ⚠ toast; builder caught the field-cap slice silently halving the bonus
+at wave ≥10 and converted rusher slots instead). QA 7/8 PASS; the one FAIL
+(chips not refreshing after death-restart) fixed same-session.
+
+**Recorded SFX complete**: the 4 broken generations (shot-smg, reload,
+impact-concrete, projectile-whoosh) regenerated with transient-focused
+prompts — in-game decode peaks now 0.31-0.94, ZERO synth-gated (was 4).
+All 8 recorded weapon samples live. Mix still owed a human ear pass.
+
+**Cat steering — the class fix (3rd stall recurrence = mistake-budget
+stop).** The wave-6 detour band-aid wasn't the class: diag probes + a
+tick-level instrumented run exposed three distinct pin geometries — (1)
+plain face wedge, (2) 4-crate pocket at (-1.9,-1.5) where last-push-wins
+normals cancel, (3) a tick-perfect limit cycle on the (-6,-6) pillar where
+the fixed-side nudge fought the natural slide direction. Final architecture
+in CatSystem seek: wall-slide projection off the SUMMED+normalized push
+normals (pocket mouths resolve correctly), corner nudge amplifies the
+projection's own preferred direction (fixed side only at true dead-center),
+and a NET-PROGRESS watchdog (0.5m per 1.2s window — per-tick stall checks
+miss pocket oscillation) that detours + flips sides on failure. Validated:
+loop-integrity **14/14 ×6 consecutive** + reach-diag kill runs. Lesson
+banked: per-tick motion ≠ progress; instrument before theorizing.
+
 ## Wave 7 (2026-08-10 overnight) — gunfeel per AAA research (.tmp/research-aaa-feel.md)
 
 - **Hit-confirm audio tiers** (the research's #1 item): body = dry click,

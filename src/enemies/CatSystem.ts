@@ -96,7 +96,11 @@ export class CatSystem {
           const count = this.spawnWave(state, px, pz);
           this.waveCleared = false;
           this.waveTimer = WAVE_BREATHER;
-          bus.emit('wave:started', { wave: state.score.wave, count });
+          bus.emit('wave:started', {
+            wave: state.score.wave,
+            count,
+            special: state.score.wave % 5 === 0,
+          });
         }
       } else {
         this.waveTimer = WAVE_BREATHER;
@@ -149,6 +153,39 @@ export class CatSystem {
           mx = (dx / dist) * cat.speed;
           mz = (dz / dist) * cat.speed;
         }
+        // Wall-slide: pressed against a face last tick → strip the
+        // into-face component so seek flows along the box toward a corner
+        // instead of ramming it. (The episodic detour alone oscillated:
+        // detour gained ~0.6m, plain seek dragged it back — wave-8 diag.)
+        // Head-on degenerate case (seek ⟂ face, no tangential left) gets a
+        // deterministic nudge on the cat's fixed detour side.
+        const pnx = cat.pushNX;
+        const pnz = cat.pushNZ;
+        if (pnx !== 0 || pnz !== 0) {
+          const into = mx * pnx + mz * pnz;
+          if (into < 0) {
+            mx -= pnx * into;
+            mz -= pnz * into;
+            const tMag = Math.hypot(mx, mz);
+            if (tMag < cat.speed * 0.3) {
+              if (tMag > cat.speed * 0.02) {
+                // Amplify the direction the projection already prefers
+                // (shortest way around). A fixed-side nudge here FIGHTS the
+                // natural slide at corners — instrumented run showed a
+                // tick-perfect limit cycle on the (-6,-6) pillar (corner
+                // nudge SE vs west-face slide N, alternating forever).
+                const boost = (cat.speed * 0.7) / tMag;
+                mx += mx * boost;
+                mz += mz * boost;
+              } else {
+                // Truly dead-center head-on: only here is an arbitrary
+                // (per-cat fixed) side needed to break symmetry.
+                mx += -pnz * cat.detourSide * cat.speed * 0.7;
+                mz += pnx * cat.detourSide * cat.speed * 0.7;
+              }
+            }
+          }
+        }
         for (const other of state.cats) {
           if (other === cat || other.phase !== 'alive') continue;
           const sx = cat.x - other.x;
@@ -160,29 +197,33 @@ export class CatSystem {
             mz += (sz / sd) * push * 2.2;
           }
         }
-        const wedgeCheckX = cat.x;
-        const wedgeCheckZ = cat.z;
         cat.x += mx * dt;
         cat.z += mz * dt;
         this.resolveObstacles(cat, state);
         cat.x = Math.max(-ARENA_CLAMP, Math.min(ARENA_CLAMP, cat.x));
         cat.z = Math.max(-ARENA_CLAMP, Math.min(ARENA_CLAMP, cat.z));
-        // Wedge detector: wanted to move at cat.speed, actually crawled.
-        const movedSq =
-          (cat.x - wedgeCheckX) * (cat.x - wedgeCheckX) +
-          (cat.z - wedgeCheckZ) * (cat.z - wedgeCheckZ);
-        const intended = cat.speed * dt;
-        if (movedSq < intended * intended * 0.06 && dist > spec.meleeRange + 0.5) {
-          cat.stuckT += dt;
-          if (cat.stuckT >= 0.7 && cat.detourT <= 0) {
-            // Side stays fixed per cat (rolled at spawn): persistently
-            // rounding the same way always clears a convex box eventually,
-            // where alternating can ping-pong at a long wall's midpoint.
+        // Net-progress watchdog: every 1.2s, require ≥0.5m of NET
+        // displacement (per-tick stall checks miss pocket oscillation —
+        // the cat moves plenty each tick while going nowhere between two
+        // crate faces). Failing the window = detour episode + side flip
+        // when in contact, so successive windows explore both ways out.
+        cat.stuckT += dt;
+        if (cat.stuckT >= 1.2) {
+          const netDX = cat.x - cat.progressX;
+          const netDZ = cat.z - cat.progressZ;
+          if (
+            netDX * netDX + netDZ * netDZ < 0.25 &&
+            dist > spec.meleeRange + 0.5 &&
+            cat.detourT <= 0
+          ) {
+            if (cat.pushNX !== 0 || cat.pushNZ !== 0) {
+              cat.detourSide = cat.detourSide === 1 ? -1 : 1;
+            }
             cat.detourT = 0.8; // ~2m of tangential travel at rusher speed
-            cat.stuckT = 0;
           }
-        } else {
-          cat.stuckT = Math.max(0, cat.stuckT - dt * 2);
+          cat.stuckT = 0;
+          cat.progressX = cat.x;
+          cat.progressZ = cat.z;
         }
       } else {
         // Gunner, inside fire range, beyond melee range: hold the preferred
@@ -300,6 +341,8 @@ export class CatSystem {
   private resolveObstacles(cat: CatData, state: GameState): boolean {
     const r = OBSTACLE_RADIUS * cat.scale;
     let pushed = false;
+    cat.pushNX = 0;
+    cat.pushNZ = 0;
     for (const box of state.level.staticColliders) {
       if (box.y + box.hy <= OBSTACLE_MIN_TOP_Y) continue;
       const dx = cat.x - box.x;
@@ -339,7 +382,19 @@ export class CatSystem {
       }
       cat.x += (nx * c + nz * s) * push;
       cat.z += (-nx * s + nz * c) * push;
+      // ACCUMULATE world-space normals — in a multi-box pocket (the 4-crate
+      // pile near (-1.9,-1.5) pinned a cat when last-push-wins made the
+      // slide directions cancel) the sum points out the pocket's mouth.
+      cat.pushNX += nx * c + nz * s;
+      cat.pushNZ += -nx * s + nz * c;
       pushed = true;
+    }
+    if (pushed) {
+      const n = Math.hypot(cat.pushNX, cat.pushNZ);
+      if (n > 1e-6) {
+        cat.pushNX /= n;
+        cat.pushNZ /= n;
+      }
     }
     return pushed;
   }
@@ -382,10 +437,16 @@ export class CatSystem {
         stuckT: 0,
         detourT: 0,
         detourSide: Math.random() < 0.5 ? -1 : 1,
+        pushNX: 0,
+        pushNZ: 0,
+        progressX: 0, // re-anchored to the real position right after creation
+        progressZ: 0,
         deadFor: 0,
         meleeAnim: 0,
         deathStyle: 0,
       };
+      cat.progressX = cat.x;
+      cat.progressZ = cat.z;
       state.cats.push(cat);
       state.enemySpawnQueue.push({ id, x: cat.x, z: cat.z, scale: cat.scale });
       const vis = buildCatVisual(id, spec);
@@ -429,6 +490,9 @@ export class CatSystem {
         /* private mode */
       }
     }
+    // TUNA economy (wave-8): 10 base / 20 heavy archetype, +5 headshot bonus.
+    state.upgrades.tuna +=
+      (cat.archetype === 'heavy' ? 20 : 10) + (headshot ? 5 : 0);
     bus.emit('enemy:killed', { id: cat.id, archetype: cat.archetype, headshot, x: cat.x, z: cat.z });
   }
 
@@ -447,6 +511,10 @@ export class CatSystem {
     state.score.comboEndsAt = 0;
     state.score.shots = 0;
     state.score.hits = 0;
+    state.upgrades.tuna = 0;
+    state.upgrades.clawsLvl = 0;
+    state.upgrades.pocketsLvl = 0;
+    state.upgrades.livesLvl = 0;
     this.lastStreakTier = 0;
     this.waveTimer = 0;
     this.waveCleared = true; // restart cleanup must not read as a cleared wave

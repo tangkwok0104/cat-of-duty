@@ -161,6 +161,21 @@ export interface HealthState {
   lastDamageAt: number;
 }
 
+/** Field-promotion economy (wave-8). Everything defaults NEUTRAL (level 0,
+ *  multipliers 1×) — the loop harness never purchases, so its exact-number
+ *  asserts (damage, reserve, hp) hold with zero upgrades. */
+export interface UpgradeState {
+  /** Spendable currency, earned on kills (10 base / 20 heavy / +5 headshot). */
+  tuna: number;
+  /** CLAW SHARPENING level 0-3: weapon damage ×(1 + 0.1·level). */
+  clawsLvl: number;
+  /** DEEP POCKETS level 0-3: reserve cap +1 mag per level (+1 mag granted
+   *  immediately on purchase). */
+  pocketsLvl: number;
+  /** NINE LIVES level 0-3: max hp +25 per level (+25 healed on purchase). */
+  livesLvl: number;
+}
+
 export interface ScoreState {
   kills: number;
   wave: number;
@@ -223,6 +238,17 @@ export interface CatData {
    *  rounding one way always clears a convex obstacle, where alternating
    *  can ping-pong at a long wall's midpoint). */
   detourSide: 1 | -1;
+  /** Obstacle push normal from the last resolveObstacles tick (0,0 = no
+   *  contact). Drives wall-slide: seek projects off this face instead of
+   *  ramming it — the episodic detour alone let plain seek drag the cat
+   *  back each cycle (~3.3m oscillation caught by the wave-8 diag probe). */
+  pushNX: number;
+  pushNZ: number;
+  /** Net-progress watchdog anchor (position at the start of the current
+   *  1.2s window). Per-tick stall checks miss pocket oscillation — the cat
+   *  moves plenty each tick while going nowhere. */
+  progressX: number;
+  progressZ: number;
   /** Wall-clock seconds since death (drives fall-over + despawn). */
   deadFor: number;
   /** Seconds of melee-swipe animation remaining (set by CatSystem when a
@@ -245,6 +271,7 @@ export interface GameState {
   weapon: WeaponState;
   health: HealthState;
   score: ScoreState;
+  upgrades: UpgradeState;
   cats: CatData[];
   /** Rapier collider handle → which cat + which part (for hitscan). */
   colliderToEnemy: Map<number, EnemyColliderRef>;
@@ -301,6 +328,7 @@ export function createGameState(): GameState {
       kills: 0, wave: 0, catsAlive: 0,
       score: 0, combo: 1, comboEndsAt: 0, shots: 0, hits: 0, best: 0,
     },
+    upgrades: { tuna: 0, clawsLvl: 0, pocketsLvl: 0, livesLvl: 0 },
     cats: [],
     colliderToEnemy: new Map(),
     enemySpawnQueue: [],

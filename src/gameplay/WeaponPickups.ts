@@ -11,6 +11,7 @@ import { bus } from '../core/EventBus';
 import { WEAPONS } from '../weapons/WeaponConfig';
 import { loadModel } from '../core/Assets';
 import { buildPickupLabel, drawCrateIcon } from './PickupLabel';
+import { reserveCap } from './Upgrades';
 
 /** Fixed arsenal pickups + ammo stations (pattern-matches gameplay/Pickups:
  *  fixed-step collection, per-frame spin/bob, emissive rings registered with
@@ -285,7 +286,9 @@ export class WeaponPickups {
     if (!cfg || !slot) return;
     if (state.weapon.owned[slotIdx]) {
       // Duplicate after a restart-grant or debug: quiet ammo top-up, no switch.
-      slot.reserve = Math.min(cfg.reserveStart, slot.reserve + cfg.mag);
+      // Capped by reserveCap so DEEP POCKETS (wave-8) extends this top-up too;
+      // with pocketsLvl 0 this is identical to cfg.reserveStart.
+      slot.reserve = Math.min(reserveCap(cfg, state), slot.reserve + cfg.mag);
       bus.emit('pickup:collected', { kind: 'ammo' });
     } else {
       state.weapon.owned[slotIdx] = true;
@@ -303,7 +306,8 @@ export class WeaponPickups {
       const cfg = WEAPONS[i];
       const slot = state.weapon.slots[i];
       if (!cfg || !slot) continue;
-      slot.reserve = Math.min(cfg.reserveStart, slot.reserve + cfg.mag);
+      // Same reserveCap clamp as acquire()'s duplicate-pickup top-up above.
+      slot.reserve = Math.min(reserveCap(cfg, state), slot.reserve + cfg.mag);
     }
     bus.emit('pickup:collected', { kind: 'ammo' }); // reuse the ammo ding
     this.present[index] = false;
@@ -331,7 +335,7 @@ export class WeaponPickups {
       if (!state.weapon.owned[i]) continue;
       const cfg = WEAPONS[i];
       const slot = state.weapon.slots[i];
-      if (cfg && slot && slot.reserve < cfg.reserveStart) return true;
+      if (cfg && slot && slot.reserve < reserveCap(cfg, state)) return true;
     }
     return false;
   }

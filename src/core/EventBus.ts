@@ -59,7 +59,12 @@ export interface Events {
   'player:died': Record<string, never>;
   /** Full slice restart (R while dead) — every system resets itself. */
   'game:restart': Record<string, never>;
-  'wave:started': { wave: number; count: number };
+  /** `special` = every-5th heavy-drop wave (extra heavies, pre-announced). */
+  'wave:started': { wave: number; count: number; special: boolean };
+  /** A field promotion was bought during the intermission (TUNA spent). */
+  'upgrade:purchased': { id: 'claws' | 'pockets' | 'lives'; level: number; cost: number };
+  /** Purchase attempt rejected — HUD gives the chip a deny shake. */
+  'upgrade:denied': { id: 'claws' | 'pockets' | 'lives'; reason: 'tuna' | 'maxed' | 'closed' };
 }
 
 type Handler<K extends keyof Events> = (payload: Events[K]) => void;

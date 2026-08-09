@@ -118,22 +118,57 @@ export const ARCHETYPES: Record<CatArchetype, EnemyArchetype> = {
  *  the player) can learn the ramp. Waves 1–2 are pure base rushers: the
  *  loop-integrity harness's aimed-shot math (100hp, scale 1) stays valid.
  *  Gunners enter at 3, the first heavy at 5. Past 6 the mix grows but the
- *  field cap stays at 8 (perf budget: ≤7 meshes/cat, draws < 150). */
+ *  field cap stays at 8 (perf budget: ≤7 meshes/cat, draws < 150).
+ *
+ *  Wave-8 heavy-drop rule: every 5th wave (wave % 5 === 0) adds +2 heavies
+ *  beyond the formula below, still respecting MAX_FIELD_CATS. Waves 1 and 2
+ *  are hardcoded pure-rusher returns with NO bonus applied — 1 % 5 !== 0 and
+ *  2 % 5 !== 0 so the rule can never reach them mathematically, but they're
+ *  also written to skip the bonus helper entirely so nothing here can ever
+ *  perturb the harness's frozen aim-math waves. */
 export const MAX_FIELD_CATS = 8;
 
+/** Appends N extra heavies to a hardcoded (pre-cap) composition array, then
+ *  re-applies the field cap. Only wave 5's literal composition is both
+ *  hardcoded AND a multiple of 5, so this is only ever called from case 5
+ *  below — the 7+ formula folds the bonus straight into its own heavy
+ *  count instead (see default branch) so the rusher-count math makes room
+ *  for it correctly rather than appending past the cap. */
+function withBonusHeavies(mix: CatArchetype[], bonus: number): CatArchetype[] {
+  if (bonus <= 0) return mix;
+  const withExtra = [...mix];
+  for (let i = 0; i < bonus; i++) withExtra.push('heavy');
+  return withExtra.slice(0, MAX_FIELD_CATS);
+}
+
 export function waveComposition(wave: number): CatArchetype[] {
+  const bonusHeavies = wave % 5 === 0 ? 2 : 0; // heavy-drop wave
   switch (wave) {
-    case 1: return ['rusher'];
-    case 2: return ['rusher', 'rusher', 'rusher'];
+    case 1: return ['rusher']; // frozen: harness aim-math contract, no bonus logic touches this
+    case 2: return ['rusher', 'rusher', 'rusher']; // frozen: harness aim-math contract, no bonus logic touches this
     case 3: return ['rusher', 'rusher', 'gunner'];
     case 4: return ['rusher', 'rusher', 'gunner', 'gunner'];
-    case 5: return ['rusher', 'rusher', 'gunner', 'gunner', 'heavy'];
+    case 5: return withBonusHeavies(['rusher', 'rusher', 'gunner', 'gunner', 'heavy'], bonusHeavies);
     case 6: return ['rusher', 'rusher', 'rusher', 'gunner', 'gunner', 'heavy'];
     default: {
       // 7+: pressure scales by swapping rushers for specialists.
       const gunners = Math.min(3, 2 + Math.floor((wave - 6) / 2));
-      const heavies = Math.min(2, 1 + Math.floor((wave - 5) / 3));
-      const rushers = Math.max(2, MAX_FIELD_CATS - gunners - heavies);
+      let heavies = Math.min(2, 1 + Math.floor((wave - 5) / 3));
+      let rushers = Math.max(2, MAX_FIELD_CATS - gunners - heavies);
+      if (bonusHeavies > 0) {
+        // Heavy-drop wave: convert rusher slots into heavies instead of
+        // appending past the cap. At this point gunners/heavies are both
+        // already formula-saturated (their Math.min ceilings), so summing
+        // them with the base rusher count sits exactly at MAX_FIELD_CATS —
+        // appending 2 more heavies on top would overflow by 2 and the
+        // trailing slice() below would silently eat the bonus (verified:
+        // wave 10/15/20/25 all landed only +1 heavy, not +2, before this
+        // fix). Converting keeps the total fixed at the cap and guarantees
+        // the full bonus lands as long as enough rushers exist to convert.
+        const converted = Math.min(bonusHeavies, rushers);
+        rushers -= converted;
+        heavies += converted;
+      }
       const mix: CatArchetype[] = [];
       for (let i = 0; i < rushers; i++) mix.push('rusher');
       for (let i = 0; i < gunners; i++) mix.push('gunner');

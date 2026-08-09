@@ -332,6 +332,16 @@
   color: var(--c-muted);
 }
 
+/* TUNA: intermission-economy currency, wave 8. Bare word, no glyph — the
+   project bans emoji in UI and a hand-drawn fishbone icon would be more
+   noise than signal at this size. */
+.score-tuna {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.14em;
+  color: var(--c-accent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- Wave toast ---- */
 .wave-toast {
   position: absolute;
@@ -355,6 +365,11 @@
   15% { opacity: 1; transform: translateX(-50%) translateY(0); }
   75% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Special (heavy-drop) wave callout — same toast, danger-red variant. */
+.wave-toast.toast-danger {
+  color: var(--c-danger);
 }
 
 /* ---- Weapon-acquire toast ----
@@ -414,6 +429,124 @@
 @keyframes ib-in {
   0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ---- Promotion chips (intermission upgrade shop, wave 8) ----
+   Sibling of .intermission-banner, positioned just below it. Shown/hidden
+   together with the banner (see showBreather/hideBreather in Hud.ts). Purely
+   an affordance readout — Z/X/C input handling lives elsewhere — so every
+   layer here is pointer-events: none. */
+.promo-chips {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--s4) + var(--s6) + var(--s1));
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--s2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.promo-chips.promo-visible {
+  opacity: 1;
+}
+
+.promo-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s05);
+  padding: var(--s1) var(--s2);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid rgba(233, 230, 215, 0.12);
+  border-radius: var(--radius);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+}
+
+/* Affordable: full brightness + accent border, matching .weapon-pip.pip-active's
+   "this is live" language. */
+.promo-chip.promo-affordable {
+  opacity: 1;
+  border-color: rgba(255, 176, 46, 0.55);
+}
+
+.promo-chip.promo-unaffordable {
+  opacity: 0.5;
+}
+
+.promo-chip.promo-maxed {
+  opacity: 0.4;
+}
+
+.promo-chip-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s05);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.promo-key {
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+.promo-label {
+  color: var(--c-text);
+}
+
+.promo-sep {
+  color: var(--c-muted);
+}
+
+.promo-cost {
+  color: var(--c-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.promo-chip.promo-maxed .promo-cost {
+  color: var(--c-muted);
+}
+
+.promo-pips {
+  display: flex;
+  gap: var(--s05);
+}
+
+.promo-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(233, 230, 215, 0.3);
+  background: transparent;
+}
+
+.promo-pip.promo-pip-filled {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+
+/* Purchase landed: quick accent ring pulse. */
+.promo-chip.promo-flash {
+  animation: promo-flash 320ms var(--ease-snap);
+}
+
+@keyframes promo-flash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 176, 46, 0.6); }
+  100% { box-shadow: 0 0 0 8px rgba(255, 176, 46, 0); }
+}
+
+/* Purchase denied: reuses .weapon-pip.pip-deny's shake keyframe (pip-deny,
+   defined above) so both "not yours" feedbacks read as one language. */
+.promo-chip.promo-deny {
+  animation: pip-deny 260ms var(--ease-snap);
 }
 
 /* ---- Minimap ---- */
