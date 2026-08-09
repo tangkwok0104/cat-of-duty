@@ -8,13 +8,61 @@
 | M1 | Player controller | ✅ complete, pending approval |
 | M2 | **VERTICAL SLICE — playable game** (`/slice`) | ✅ complete |
 | M3 | Weapons: 3-gun loadout, ADS, recoil, reload | ✅ complete |
-| M4 | Cats: real models, animation, AI, hitboxes | ✅ procedural version shipped (archetypes, ranged AI, articulated bodies) — real GLB models still blocked on /assets |
+| M4 | Cats: real models, animation, AI, hitboxes | ✅ complete — rigged GLB soldiers, 8 clips, velocity-synced locomotion, wall-slide steering (waves 3-8) |
 | M5 | HUD + feedback polish | ✅ complete |
-| M6 | Level art + environment pass | ⚠ combat-space pass shipped (platform/stairs/cover) — art textures still blocked on /assets |
-| M7 | Game loop: menus, waves, scoring, settings | ✅ complete |
-| M8 | Polish + performance | ✅ partial (shake, hit-stop, budgets green; final pass after M4/M6) |
+| M6 | Level art + environment pass | ⚠ combat space + props + 38×38 arena shipped; outer-ring corners still bare (see Deferred) |
+| M7 | Game loop: menus, waves, scoring, settings | ✅ complete + TUNA economy, special waves (wave 8) |
+| M8 | Polish + performance | ✅ gunfeel wave shipped (wave 7); budgets green |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
+
+---
+
+## ▶ NEXT SESSION STARTS HERE (checkpoint 2026-08-10)
+
+**State:** live at https://cat-of-duty.vercel.app · branch `m0-scaffold` =
+`main` = `dd94021` · working tree clean · all gates green (tsc ×2, build,
+loop-integrity 14/14 ×6, perf 120fps / ~9ms p95 / 145 draws).
+No git remote — local only; Vercel deploys straight from the working copy.
+
+### 1. DECISIONS OWED BY ANSON (ask these first, as one numbered menu)
+
+| # | Decision | Options | Recommendation |
+|---|---|---|---|
+| 1 | **Multiplayer** (he raised it) | A) leaderboard only (~days) · B) 2-player co-op, WebRTC (~weeks, real project) · C) park it | **A first** — most of the "others exist" feeling for a fraction of the cost |
+| 2 | **Feedback widget + privacy/terms pages** | add / skip | **Add lightweight** — the 67Lab finalize harness fails without them, and stranger bug reports are worth having |
+| 3 | **TUNA economy balance** | keep / tune after his playtest / remove | **Tune after playtest** — needs his hands on it, not more agent guessing |
+| 4 | **Polish debt** | queue next session / leave | Leave unless he asks — see Deferred |
+
+### 2. HUMAN PASSES OWED (nothing agent-verifiable is left on these)
+
+- **Sound mix on headphones** — footstep prominence, headshot tick clarity over SMG fire, overall levels. Every gain value is a first-pass guess.
+- **Feel check** — viewmodel sway, sprint FOV kick (QA CONCERN: a +3.5° kick can't be proven from static frames), cat run-cycle.
+- **Economy pacing** — one run to wave 6-7 answers decision #3.
+
+### 3. DEFERRED (real, unblocked, nobody's building it)
+
+- Outer-ring arena corners are bare floor (~8-10m of nothing from a corner).
+- KTX2/Basis texture pipeline — 4-8× VRAM win, `KTX2Loader` unwired (`.tmp/research-aaa-feel.md` §5).
+- Ragdolls, reload animation on the gun, pathfinding proper (steering is heuristic — good enough, see wave 8).
+- Iris Xe / low-end hardware never measured; all numbers are from the M5 Pro.
+- Special waves exist but every enemy is still a cat re-skin — research says a
+  boss needs a distinct silhouette (`.tmp/research-aaa-feel.md` §3).
+
+### 4. HOW TO WORK HERE (read before building)
+
+- Research report: `.tmp/research-aaa-feel.md` (COD/PUBG technique map, top-10 ranked).
+- Harness gotchas: project memory `cat-of-duty-harness-patterns` — 60ms mouse-hold
+  rule, CDP screencast for sub-100ms VFX, LoS-verified shooter placement, freeze-cats.
+- Env gotchas: project memory `cat-of-duty-dev-environment` — absolute nvm paths,
+  vite `--host 127.0.0.1`, `--use-angle=metal` for real GPU in headless.
+- **Flake discipline:** loop-integrity failures need ≥3 runs before you believe
+  an A/B. One lucky run sent wave 6 chasing the wrong cause for an hour.
+- **RTK:** any number you report or branch on comes from `rtk proxy <cmd>` — a
+  bare `npx tsc` returned a fabricated clean summary during wave 5.
+- Deploy: `vercel --prod --yes` from the project root, then verify 200 + screenshot.
+
+---
 
 ## SHIPPED (2026-08-10) — https://cat-of-duty.vercel.app
 
