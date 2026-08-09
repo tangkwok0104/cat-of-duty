@@ -30,6 +30,9 @@ const _m = new Matrix4();
 const _q = new Quaternion();
 const _p = new Vector3();
 const _s = new Vector3(1, 1, 1);
+// Separate non-uniform scale temp for the stair steps below — keeps the
+// shared _s (used everywhere else as a fixed identity scale) untouched.
+const _s2 = new Vector3();
 
 function pbrMaterial(maps: PbrMaps, tint = 0xffffff): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({
@@ -46,9 +49,11 @@ function pbrMaterial(maps: PbrMaps, tint = 0xffffff): MeshStandardMaterial {
 }
 
 /** Grey-box arena: PBR floor/walls, four pillars, static crate clusters
- *  (instanced), six dynamic crates (instanced, driven by physics), amber
- *  emissive strips + one red objective panel for the selective bloom pass.
- *  Also writes collider specs into GameState.level for the physics system. */
+ *  (instanced), six dynamic crates (instanced, driven by physics), a raised
+ *  combat platform with stepped stairs, two angled mid-field cover walls,
+ *  amber emissive strips + one red objective panel for the selective bloom
+ *  pass. Also writes collider specs into GameState.level for the physics
+ *  system. */
 export function buildGreyBoxRoom(
   scene: Scene,
   tex: LevelTextures,
@@ -181,6 +186,102 @@ export function buildGreyBoxRoom(
   dynamicCrates.instanceMatrix.setUsage(DynamicDrawUsage);
   scene.add(dynamicCrates);
 
+  // ---- Combat platform (NE quadrant): raised hold point ----
+  // Reachable by two stepped stairs. There are no sloped colliders in the
+  // schema, so stairs ARE the ramp — the character controller autosteps up
+  // to 0.35 m, so every riser here is capped at 0.30 m to stay inside that
+  // budget. Ranged cats can still hit a player camping the top (line of
+  // sight isn't blocked from range), so holding it is a punishable choice,
+  // not a free win.
+  const PLATFORM_CX = 8.3;
+  const PLATFORM_CZ = -8.3;
+  const PLATFORM_TOP = 1.2;
+  // 3 m × 3 m top. Centred to stay clear of the (6,-6) pillar + its crate
+  // scatter (gap ≥0.45 m) and ≥1.2 m inside the 11-11.5 spawn ring on both
+  // axes (checked against the platform's own extents, the widest new shape).
+  const PLATFORM_HALF = 1.5;
+  const platform = new Mesh(
+    new BoxGeometry(PLATFORM_HALF * 2, 0.3, PLATFORM_HALF * 2),
+    wallMat, // reuse arena PBR material — no new texture
+  );
+  platform.position.set(PLATFORM_CX, PLATFORM_TOP - 0.15, PLATFORM_CZ);
+  platform.castShadow = true;
+  platform.receiveShadow = true;
+  scene.add(platform);
+  state.level.staticColliders.push({
+    x: PLATFORM_CX, y: PLATFORM_TOP - 0.15, z: PLATFORM_CZ,
+    hx: PLATFORM_HALF, hy: 0.15, hz: PLATFORM_HALF, rotY: 0,
+  });
+
+  // Stairs: 3 risers per face (0.9 / 0.6 / 0.3 m tall), landing on the
+  // platform's own 0.3 m top riser (0.9 → 1.2 m) — every step is 0.3 m, so
+  // the autostep controller climbs the whole flight without a jump. South
+  // face (open field/spawn side) and west face (away from the SW pillar +
+  // crate cluster) so both approaches stay clear of existing geometry.
+  const STEP_RISE = 0.3;
+  const STEP_RUN = 0.4;
+  const STEP_HALF_WIDTH = 0.8; // 1.6 m wide flight, centred on the face
+  const stepDefs: { x: number; z: number; hx: number; hz: number; h: number }[] = [];
+  const southFaceZ = PLATFORM_CZ + PLATFORM_HALF; // -6.8, opens toward +z
+  for (let i = 0; i < 3; i++) {
+    const near = southFaceZ + i * STEP_RUN;
+    stepDefs.push({
+      x: PLATFORM_CX, z: near + STEP_RUN / 2,
+      hx: STEP_HALF_WIDTH, hz: STEP_RUN / 2, h: STEP_RISE * (3 - i),
+    });
+  }
+  const westFaceX = PLATFORM_CX - PLATFORM_HALF; // 6.8, opens toward -x
+  for (let i = 0; i < 3; i++) {
+    const near = westFaceX - i * STEP_RUN;
+    stepDefs.push({
+      x: near - STEP_RUN / 2, z: PLATFORM_CZ,
+      hx: STEP_RUN / 2, hz: STEP_HALF_WIDTH, h: STEP_RISE * (3 - i),
+    });
+  }
+  const stepGeo = new BoxGeometry(1, 1, 1); // unit box, scaled per instance
+  const steps = new InstancedMesh(stepGeo, wallMat, stepDefs.length);
+  stepDefs.forEach((d, i) => {
+    _q.identity();
+    _s2.set(d.hx * 2, d.h, d.hz * 2);
+    _m.compose(_p.set(d.x, d.h / 2, d.z), _q, _s2);
+    steps.setMatrixAt(i, _m);
+    state.level.staticColliders.push({
+      x: d.x, y: d.h / 2, z: d.z, hx: d.hx, hy: d.h / 2, hz: d.hz, rotY: 0,
+    });
+  });
+  steps.castShadow = true;
+  steps.receiveShadow = true;
+  scene.add(steps);
+
+  // ---- Mid-field cover walls ----
+  // Waist-high (top 1.1 m > 1.0 m), so they block enemy line-of-sight per
+  // the AI contract while a standing player (eye 1.62 m) still shoots over
+  // the top and a crouched player can peek-and-hide behind them. Both sit
+  // outside the centre 4 m circle, off the spawn sightline (2.5,9.5)→(0,0)
+  // — which never leaves x∈[0,2.5], z∈[0,9.5] — and well inside the spawn
+  // ring, so neither wall can obstruct a spawn point or the opening view.
+  const COVER_LEN = 2.4;
+  const COVER_H = 1.1;
+  const COVER_T = 0.3;
+  const coverDefs: { x: number; z: number; rotY: number }[] = [
+    { x: -4.5, z: 4.0, rotY: 0.5 },
+    { x: 4.0, z: -2.0, rotY: -0.35 },
+  ];
+  const coverGeo = new BoxGeometry(COVER_LEN, COVER_H, COVER_T);
+  const coverWalls = new InstancedMesh(coverGeo, wallMat, coverDefs.length);
+  coverDefs.forEach((d, i) => {
+    _q.setFromAxisAngle(new Vector3(0, 1, 0), d.rotY);
+    _m.compose(_p.set(d.x, COVER_H / 2, d.z), _q, _s);
+    coverWalls.setMatrixAt(i, _m);
+    state.level.staticColliders.push({
+      x: d.x, y: COVER_H / 2, z: d.z,
+      hx: COVER_LEN / 2, hy: COVER_H / 2, hz: COVER_T / 2, rotY: d.rotY,
+    });
+  });
+  coverWalls.castShadow = true;
+  coverWalls.receiveShadow = true;
+  scene.add(coverWalls);
+
   // ---- Emissive accents (selective bloom targets) ----
   // Amber strips on the inner faces of the four pillars.
   const stripGeo = new BoxGeometry(0.1, 1.4, 0.04);
@@ -207,6 +308,16 @@ export function buildGreyBoxRoom(
   });
   scene.add(strips);
   bloomMeshes.push(strips);
+
+  // Platform edge trim — same amber emissive material as the pillar strips,
+  // mounted just under the top lip of the south (field-facing) approach so
+  // the platform reads as a marked hold point from across the arena. Sits
+  // flush against geometry the platform slab collider already covers, so
+  // it needs no collider of its own (same pattern as the strips above).
+  const platformStrip = new Mesh(new BoxGeometry(2.6, 0.1, 0.05), stripMat);
+  platformStrip.position.set(PLATFORM_CX, 1.15, southFaceZ + 0.025);
+  scene.add(platformStrip);
+  bloomMeshes.push(platformStrip);
 
   // Red signal panel on the north wall — framed in a dark bezel and flush
   // to the wall so it reads as installed signage, not a floating glitch quad.

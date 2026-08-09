@@ -23,6 +23,13 @@ export interface Events {
   'weapon:switched': { slot: number; name: string };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
+  /** A ranged cat started its telegraph (audio cue — the fair-warning chirp). */
+  'enemy:windup': { id: number; x: number; z: number };
+  /** A ranged cat fired a projectile (muzzle sound, minimap ping). */
+  'enemy:fired': { id: number; x: number; z: number };
+  /** A cat died (killfeed reads the archetype name from here — the cat may
+   *  already be gone from state.cats when the HUD renders). */
+  'enemy:killed': { id: number; archetype: import('./GameState').CatArchetype; headshot: boolean };
   /** The player took damage (fromX/fromZ = attacker position, for the
    *  damage-direction indicator). */
   'player:damaged': { amount: number; fromX: number; fromZ: number };

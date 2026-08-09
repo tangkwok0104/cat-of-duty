@@ -1,6 +1,6 @@
 import { bus } from '../core/EventBus';
 
-/** Slice audio: five sounds synthesized with raw WebAudio — original work,
+/** Slice audio: every cue synthesized with raw WebAudio — original work,
  *  license-clean, zero downloads. Howler takes over when real CC0 files land
  *  in /assets (M-audio pass); this module keeps the same event wiring.
  *  The context resumes on the first pointer-lock click (autoplay policy). */
@@ -25,8 +25,12 @@ export class SoundBus {
       if (killed) this.kill();
       else this.hit(part === 'head');
     });
+    // A projectile hitting the player routes through player:damaged too, so
+    // it reuses the same hurt grunt as melee — no separate impact sound.
     bus.on('player:damaged', () => this.hurt());
     bus.on('player:died', () => this.death());
+    bus.on('enemy:windup', () => this.windupChirp());
+    bus.on('enemy:fired', () => this.zap());
   }
 
   private nextBeatAt = 0;
@@ -108,6 +112,20 @@ export class SoundBus {
   private kill(): void {
     this.tone(880, 0.05, 0.45, 'square');
     setTimeout(() => this.tone(1320, 0.07, 0.45, 'square'), 45);
+  }
+
+  /** Enemy windup telegraph: short rising two-tone chirp — the fair-warning
+   *  cue that a gunner is about to fire. Square + high register so it cuts
+   *  through gunfire at combat volume. */
+  private windupChirp(): void {
+    this.tone(660, 0.07, 0.5, 'square', 990);
+    setTimeout(() => this.tone(990, 0.09, 0.55, 'square', 1480), 80);
+  }
+
+  /** Enemy projectile away: quick falling zap/pew — a pure-tone sweep, so
+   *  it never reads as a player gun (those are noise-crack + thump). */
+  private zap(): void {
+    this.tone(1700, 0.09, 0.4, 'sawtooth', 260);
   }
 
   /** Player hurt: short low grunt. */

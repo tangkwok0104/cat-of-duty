@@ -8,13 +8,33 @@
 | M1 | Player controller | ✅ complete, pending approval |
 | M2 | **VERTICAL SLICE — playable game** (`/slice`) | ✅ complete |
 | M3 | Weapons: 3-gun loadout, ADS, recoil, reload | ✅ complete |
-| M4 | Cats: real models, animation, AI, hitboxes | ⛔ blocked on /assets (Quaternius pack — human download) |
+| M4 | Cats: real models, animation, AI, hitboxes | ✅ procedural version shipped (archetypes, ranged AI, articulated bodies) — real GLB models still blocked on /assets |
 | M5 | HUD + feedback polish | ✅ complete |
-| M6 | Level art + environment pass | ⛔ blocked on /assets (level kit/textures) |
+| M6 | Level art + environment pass | ⚠ combat-space pass shipped (platform/stairs/cover) — art textures still blocked on /assets |
 | M7 | Game loop: menus, waves, scoring, settings | ✅ complete |
 | M8 | Polish + performance | ✅ partial (shake, hit-stop, budgets green; final pass after M4/M6) |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
+
+## Combat Wave 1 (2026-08-09) — cats that shoot back
+
+Three enemy archetypes, data-driven in `enemies/EnemyConfig.ts` (same typed-TS
+pattern as WeaponConfig): **RUSHER** (fast melee), **GUNNER** (holds ~7m,
+strafes, 0.45s eye-flare + chirp telegraph, then a 3-shot burst of dodgeable
+14m/s glowing projectiles — deliberately not hitscan: seeing death coming is
+the fairness contract), **HEAVY** (260hp, 1.35× scale, 25dmg claw, ×2 score).
+Deterministic wave composition (gunners at 3, first heavy at 5, field cap 8);
+waves 1–2 stay pure base rushers so harness aim math holds. Projectiles:
+pooled 64, allocation-free, level-geometry LoS + collision, bloom-registered;
+damage wedge points at the shooter. All cats now push out of static colliders
+(no more pillar clipping). CatVisual rewritten: articulated 7-mesh procedural
+cats — diagonal-trot gait, tail sway, windup crouch+flare, keel-over death —
+with silhouette identity (gunner shoulder-blaster, heavy helmet plate).
+Arena: NE raised platform (1.2m, two 0.3m-step stairs — autostep climbs
+them) + two angled waist-high cover walls; spawn ring/sightline verified
+clear. HUD: killfeed archetype names, per-type minimap tints. Audio: windup
+chirp + fired zap (synth, original). Gates: tsc 0, build green, loop 14/14
+×2, perf 83 draws / 13.4k tris / p95 9.2ms / heap Δ 0.
 
 ## M2 — Vertical Slice (playable game)
 

@@ -76,6 +76,7 @@ async function boot(): Promise<void> {
   weapon.arm(state);
   postfx.addBloomMeshes(weapon.bloomMeshes);
   const cats = new CatSystem(renderSys.scene);
+  postfx.addBloomMeshes(cats.bloomMeshes); // projectile glow spheres
   const hud = new Hud();
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy

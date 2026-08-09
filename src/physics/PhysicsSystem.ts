@@ -259,21 +259,23 @@ export class PhysicsSystem implements CrateResetter, HitscanCaster {
    *  owns the colliders the hitscan sees. */
   private syncEnemies(state: GameState): void {
     for (const req of state.enemySpawnQueue) {
+      const scale = req.scale;
+      const bodyCenterY = CAT_BODY_CENTER_Y * scale;
       const body = this.world.createRigidBody(
         this.RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
           req.x,
-          CAT_BODY_CENTER_Y,
+          bodyCenterY,
           req.z,
         ),
       );
       const torso = this.world.createCollider(
-        this.RAPIER.ColliderDesc.capsule(CAT_BODY_HALF, CAT_BODY_RADIUS),
+        this.RAPIER.ColliderDesc.capsule(CAT_BODY_HALF * scale, CAT_BODY_RADIUS * scale),
         body,
       );
       const head = this.world.createCollider(
-        this.RAPIER.ColliderDesc.ball(CAT_HEAD_RADIUS).setTranslation(
+        this.RAPIER.ColliderDesc.ball(CAT_HEAD_RADIUS * scale).setTranslation(
           0,
-          CAT_HEAD_Y - CAT_BODY_CENTER_Y,
+          (CAT_HEAD_Y - CAT_BODY_CENTER_Y) * scale,
           0,
         ),
         body,
@@ -297,7 +299,11 @@ export class PhysicsSystem implements CrateResetter, HitscanCaster {
     for (const cat of state.cats) {
       if (cat.phase !== 'alive') continue;
       const entry = this.catBodies.get(cat.id);
-      entry?.body.setNextKinematicTranslation({ x: cat.x, y: CAT_BODY_CENTER_Y, z: cat.z });
+      entry?.body.setNextKinematicTranslation({
+        x: cat.x,
+        y: CAT_BODY_CENTER_Y * cat.scale,
+        z: cat.z,
+      });
     }
   }
 

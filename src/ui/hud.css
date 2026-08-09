@@ -275,9 +275,18 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--c-danger);
+  background: var(--c-text); /* rusher: neutral bone */
   opacity: 0;
   will-change: transform;
+}
+
+/* Threat tint per archetype (Hud sets these off CatData.archetype). */
+.mm-gunner {
+  background: var(--c-accent); /* amber — matches the gunner eye flare */
+}
+
+.mm-heavy {
+  background: var(--c-danger);
 }
 
 /* ---- Damage direction wedge ---- */

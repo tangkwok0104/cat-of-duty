@@ -176,13 +176,22 @@ export interface ScoreState {
 
 export type CatPhase = 'alive' | 'dying';
 
+/** Enemy archetype ids. Core owns the union; per-archetype data lives in
+ *  enemies/EnemyConfig.ts (data-driven, same pattern as WeaponConfig). */
+export type CatArchetype = 'rusher' | 'gunner' | 'heavy';
+
 export interface CatData {
   id: number;
+  archetype: CatArchetype;
   x: number;
   y: number;
   z: number;
   yaw: number;
   hp: number;
+  /** Spawn hp for this archetype (visual damage tint, future hp bars). */
+  maxHp: number;
+  /** Uniform visual + hitbox scale (1 = base cat). */
+  scale: number;
   phase: CatPhase;
   /** Movement speed (m/s), varied per cat. */
   speed: number;
@@ -190,6 +199,18 @@ export interface CatData {
   flinch: number;
   /** Seconds until this cat may claw the player again. */
   attackCooldown: number;
+  /** Ranged: seconds until the next windup may start. */
+  fireCooldown: number;
+  /** Ranged: telegraph seconds remaining (>0 = winding up, eyes flare). */
+  windup: number;
+  /** Ranged: shots left in the current burst. */
+  burstLeft: number;
+  /** Ranged: seconds until the next burst shot. */
+  burstTimer: number;
+  /** Gunner strafe direction (flips on a timer / wall clamp). */
+  strafeDir: 1 | -1;
+  /** Seconds until the strafe direction may flip. */
+  strafeTimer: number;
   /** Wall-clock seconds since death (drives fall-over + despawn). */
   deadFor: number;
 }
@@ -209,8 +230,9 @@ export interface GameState {
   cats: CatData[];
   /** Rapier collider handle → which cat + which part (for hitscan). */
   colliderToEnemy: Map<number, EnemyColliderRef>;
-  /** Spawn/remove request queues (enemies → physics). */
-  enemySpawnQueue: { id: number; x: number; z: number }[];
+  /** Spawn/remove request queues (enemies → physics). `scale` sizes the
+   *  per-part hitboxes (1 = base cat: torso centre 0.44, head ball 0.95). */
+  enemySpawnQueue: { id: number; x: number; z: number; scale: number }[];
   enemyRemoveQueue: number[];
   /** Harness-only: freeze cat movement so aimed-shot tests are
    *  deterministic. Never set by game code. */

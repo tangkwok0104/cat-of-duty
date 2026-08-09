@@ -1,5 +1,6 @@
-import type { GameState } from '../core/GameState';
+import type { GameState, CatArchetype } from '../core/GameState';
 import { bus } from '../core/EventBus';
+import { ARCHETYPES } from '../enemies/EnemyConfig';
 
 const REFRESH_MS = 100;
 
@@ -31,8 +32,10 @@ export class Hud {
 
     bus.on('enemy:hit', ({ killed, part }) => {
       this.hitmarker(killed, part === 'head');
-      if (killed) this.killfeed(part === 'head');
     });
+    // Killfeed reads the victim's name off enemy:killed — the cat may
+    // already be gone from state.cats by the time the entry renders.
+    bus.on('enemy:killed', ({ archetype, headshot }) => this.killfeed(archetype, headshot));
     bus.on('weapon:switched', ({ slot, name }) => {
       this.weaponName = name;
       const el = this.els['weapon-name'];
@@ -204,7 +207,7 @@ export class Hud {
     m.classList.add('hm-play');
   }
 
-  private killfeed(headshot: boolean): void {
+  private killfeed(archetype: CatArchetype, headshot: boolean): void {
     const feed = this.els['killfeed'];
     if (!feed) return;
     const entry = document.createElement('div');
@@ -218,7 +221,7 @@ export class Hud {
     if (headshot) sep.classList.add('kf-hs');
     const victim = document.createElement('span');
     victim.className = 'kf-victim';
-    victim.textContent = 'HOSTILE CAT';
+    victim.textContent = ARCHETYPES[archetype].name;
     entry.append(weapon, sep, victim);
     feed.prepend(entry);
     while (feed.children.length > 4) feed.lastChild?.remove();
@@ -318,6 +321,15 @@ export class Hud {
       if (!dot) continue;
       const cat = state.cats[i];
       if (cat && cat.phase === 'alive') {
+        // Threat tint: rusher neutral, gunner amber, heavy red. Dot slots
+        // are reused across cats, so re-check the class each refresh.
+        const cls =
+          cat.archetype === 'heavy'
+            ? 'mm-cat mm-heavy'
+            : cat.archetype === 'gunner'
+              ? 'mm-cat mm-gunner'
+              : 'mm-cat';
+        if (dot.className !== cls) dot.className = cls;
         dot.style.setProperty('opacity', '1');
         dot.style.setProperty(
           'transform',
