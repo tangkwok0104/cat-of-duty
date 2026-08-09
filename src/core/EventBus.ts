@@ -28,8 +28,11 @@ export interface Events {
   /** A ranged cat fired a projectile (muzzle sound, minimap ping). */
   'enemy:fired': { id: number; x: number; z: number };
   /** A cat died (killfeed reads the archetype name from here — the cat may
-   *  already be gone from state.cats when the HUD renders). */
-  'enemy:killed': { id: number; archetype: import('./GameState').CatArchetype; headshot: boolean };
+   *  already be gone from state.cats when the HUD renders; x/z is the death
+   *  spot, where pickups drop). */
+  'enemy:killed': { id: number; archetype: import('./GameState').CatArchetype; headshot: boolean; x: number; z: number };
+  /** The player collected a drop. */
+  'pickup:collected': { kind: 'health' | 'ammo' };
   /** The player took damage (fromX/fromZ = attacker position, for the
    *  damage-direction indicator). */
   'player:damaged': { amount: number; fromX: number; fromZ: number };

@@ -356,7 +356,7 @@ export class CatSystem {
         /* private mode */
       }
     }
-    bus.emit('enemy:killed', { id: cat.id, archetype: cat.archetype, headshot });
+    bus.emit('enemy:killed', { id: cat.id, archetype: cat.archetype, headshot, x: cat.x, z: cat.z });
   }
 
   private restart(): void {

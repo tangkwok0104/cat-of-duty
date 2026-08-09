@@ -14,6 +14,7 @@ import { CameraFeel } from './player/CameraFeel';
 import { Health } from './player/Health';
 import { WeaponSystem } from './weapons/WeaponSystem';
 import { CatSystem } from './enemies/CatSystem';
+import { Pickups } from './gameplay/Pickups';
 import { Hud } from './ui/Hud';
 import { Menu } from './ui/Menu';
 import { SoundBus } from './audio/SoundBus';
@@ -77,6 +78,8 @@ async function boot(): Promise<void> {
   postfx.addBloomMeshes(weapon.bloomMeshes);
   const cats = new CatSystem(renderSys.scene);
   postfx.addBloomMeshes(cats.bloomMeshes); // projectile glow spheres
+  const pickups = new Pickups(renderSys.scene);
+  postfx.addBloomMeshes(pickups.bloomMeshes); // health/ammo glow octahedra
   const hud = new Hud();
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
@@ -132,7 +135,7 @@ async function boot(): Promise<void> {
   // (which applies player movement and mirrors cat colliders).
   let wavesArmed = false;
   let deathBlend = 0;
-  const loop = new Loop(state, [player, health, cats, physics], (alpha, frameMs) => {
+  const loop = new Loop(state, [player, health, cats, physics, pickups], (alpha, frameMs) => {
     const dt = frameMs / 1000;
     const now = performance.now();
     perfRun.beforeRender();
@@ -140,6 +143,7 @@ async function boot(): Promise<void> {
     cameraFeel.frameUpdate(state, dt);
     weapon.frameUpdate(state, dt, now / 1000);
     cats.frameUpdate(state, now / 1000);
+    pickups.frameUpdate(now / 1000);
     renderSys.render(alpha, state);
     input.completeFrame(performance.now()); // closes input→render latency
     hud.frame(state, dt, now);

@@ -31,6 +31,7 @@ export class SoundBus {
     bus.on('player:died', () => this.death());
     bus.on('enemy:windup', () => this.windupChirp());
     bus.on('enemy:fired', () => this.zap());
+    bus.on('pickup:collected', ({ kind }) => this.pickup(kind));
   }
 
   private nextBeatAt = 0;
@@ -126,6 +127,14 @@ export class SoundBus {
    *  it never reads as a player gun (those are noise-crack + thump). */
   private zap(): void {
     this.tone(1700, 0.09, 0.4, 'sawtooth', 260);
+  }
+
+  /** Pickup collected: bright rising ding — ammo pitched a touch higher
+   *  than health, distinct enough without needing a whole second timbre. */
+  private pickup(kind: 'health' | 'ammo'): void {
+    const base = kind === 'ammo' ? 1320 : 1046;
+    this.tone(base, 0.05, 0.4, 'sine', base * 1.5);
+    setTimeout(() => this.tone(base * 1.5, 0.08, 0.35, 'sine'), 45);
   }
 
   /** Player hurt: short low grunt. */
