@@ -14,6 +14,7 @@ import { CameraFeel } from './player/CameraFeel';
 import { Health } from './player/Health';
 import { WeaponSystem } from './weapons/WeaponSystem';
 import { CatSystem } from './enemies/CatSystem';
+import { CatOverlays } from './enemies/CatOverlays';
 import { Pickups } from './gameplay/Pickups';
 import { WeaponPickups } from './gameplay/WeaponPickups';
 import { Hud } from './ui/Hud';
@@ -79,6 +80,9 @@ async function boot(): Promise<void> {
   postfx.addBloomMeshes(weapon.bloomMeshes);
   const cats = new CatSystem(renderSys.scene);
   postfx.addBloomMeshes(cats.bloomMeshes); // projectile glow spheres
+  // HP bars + floating damage numbers — flat UI-ish sprites, deliberately
+  // NOT bloomed (bloom would blow out the small canvas text/bars).
+  const catOverlays = new CatOverlays(renderSys.scene);
   const pickups = new Pickups(renderSys.scene);
   postfx.addBloomMeshes(pickups.bloomMeshes); // health/ammo glow octahedra
   const weaponPickups = new WeaponPickups(renderSys.scene);
@@ -163,6 +167,7 @@ async function boot(): Promise<void> {
     cameraFeel.frameUpdate(state, dt);
     weapon.frameUpdate(state, dt, now / 1000);
     cats.frameUpdate(state, now / 1000);
+    catOverlays.frameUpdate(state, now / 1000);
     pickups.frameUpdate(now / 1000);
     weaponPickups.frameUpdate(now / 1000);
     renderSys.render(alpha, state);

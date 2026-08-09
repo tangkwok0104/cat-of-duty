@@ -64,6 +64,17 @@ export interface WeaponConfig {
     position: readonly [number, number, number];
     rotation: readonly [number, number, number];
     muzzleLocal: readonly [number, number, number];
+    /** Cat-paw grip prop (paw.glb, loaded once and cloned per gun — see
+     *  Viewmodel.loadPaw). Transform is in the same gun-local space as
+     *  `position`/`rotation` above: wraps the pistol-grip area with the
+     *  forearm trailing off toward the bottom-right screen edge (the
+     *  player's shoulder). Omit to ship this gun corner-anchored without a
+     *  paw if the grip fights the gun's geometry. */
+    paw?: {
+      scale: number;
+      position: readonly [number, number, number];
+      rotation: readonly [number, number, number];
+    };
   };
 }
 
@@ -104,6 +115,11 @@ export const WEAPONS: readonly WeaponConfig[] = [
       position: [0, -0.055, -0.2],
       rotation: [0, -Math.PI / 2 + 0.15, 0],
       muzzleLocal: [-0.95, -0.02, 0],
+      paw: {
+        scale: 0.095,
+        position: [0.01, -0.065, -0.02],
+        rotation: [0.4, -0.5, -2.356],
+      },
     },
   },
   {
@@ -137,6 +153,11 @@ export const WEAPONS: readonly WeaponConfig[] = [
       position: [0, -0.015, -0.24],
       rotation: [0.38, -Math.PI / 2 + 0.15, 0],
       muzzleLocal: [-0.95, 0.05, 0],
+      paw: {
+        scale: 0.09,
+        position: [0.01, -0.035, -0.05],
+        rotation: [0.4, -0.5, -2.356],
+      },
     },
   },
   {
@@ -168,6 +189,11 @@ export const WEAPONS: readonly WeaponConfig[] = [
       position: [0, -0.045, -0.22],
       rotation: [0, -Math.PI / 2 + 0.15, 0],
       muzzleLocal: [-0.95, -0.03, 0],
+      paw: {
+        scale: 0.1,
+        position: [0.01, -0.06, -0.01],
+        rotation: [0.4, -0.5, -2.356],
+      },
     },
   },
   {
@@ -215,6 +241,11 @@ export const WEAPONS: readonly WeaponConfig[] = [
       position: [0, -0.03, -0.18],
       rotation: [0, -Math.PI / 2 + 0.15, 0],
       muzzleLocal: [-0.84, 0.12, 0],
+      paw: {
+        scale: 0.085,
+        position: [0.01, -0.05, 0.0],
+        rotation: [0.4, -0.5, -2.356],
+      },
     },
   },
 ];

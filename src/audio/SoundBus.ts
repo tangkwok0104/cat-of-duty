@@ -1,15 +1,26 @@
 import { bus } from '../core/EventBus';
 
-/** Cat vocal sample keys — six generated CC0 clips wired in for the M-audio
- *  pass (see /assets/gen/audio). Every one keeps a synth fallback below in
- *  case its decode fails, so audio is never silently missing. */
+/** Recorded sample keys. Six cat-vocal clips (M-audio pass) plus eight
+ *  weapon SFX clips (M-audio-2 pass): per-gun shots, reload foley, dry-fire
+ *  click, a concrete-impact thud, and an enemy-projectile whoosh — all
+ *  under /assets/gen/audio. Every one keeps a synth fallback below in case
+ *  its decode fails (or, new in this pass, decodes to near-silence — see
+ *  MIN_SAMPLE_PEAK), so audio is never silently missing or silently broken. */
 type SampleName =
   | 'meow-battle'
   | 'hiss'
   | 'death-yowl'
   | 'growl-heavy'
   | 'chirp-alert'
-  | 'meow-victory';
+  | 'meow-victory'
+  | 'shot-rifle'
+  | 'shot-shotgun'
+  | 'shot-sniper'
+  | 'shot-smg'
+  | 'reload'
+  | 'dryfire'
+  | 'impact-concrete'
+  | 'projectile-whoosh';
 
 interface SampleEntry {
   status: 'loading' | 'loaded' | 'failed';
@@ -18,14 +29,48 @@ interface SampleEntry {
 
 type PlayResult = 'played' | 'throttled' | 'unavailable';
 
+// -----------------------------------------------------------------------
+// MIX PASS — central gain table (M-audio-2). Linear 0..1, each one the gain
+// on a node feeding SoundBus's master bus, so every number is "relative
+// loudness at max settings-menu volume" — the master volume slider still
+// scales everything below it (see unlock()/setVolume()). These are starting
+// points from listening once during the build; final in-game balance needs
+// a human ear pass on real hardware/headphones.
+// -----------------------------------------------------------------------
+/** Player gunfire (rifle/shotgun/sniper/smg) — the loudest thing in the
+ *  mix on purpose: the player's own gun should always read over everything
+ *  else happening on screen. */
+const GAIN_PLAYER_SHOT = 0.9;
+/** Reload foley + dry-fire click. */
+const GAIN_RELOAD_DRY = 0.6;
+/** Bullet-hits-world-geometry thud (weapon:impact). Background texture the
+ *  player isn't meant to consciously track, so it sits low in the mix. */
+const GAIN_IMPACT = 0.35;
+/** Enemy projectile flyby — layered *under* the existing zap() cue, not
+ *  replacing it, so it stays subordinate to the tone that already reads as
+ *  "incoming fire." */
+const GAIN_PROJECTILE_WHOOSH = 0.4;
+/** All six recorded cat-vocal samples (battle meow / hiss / death yowl /
+ *  heavy growl / alert chirp / victory meow). These were previously hand-
+ *  tuned per cue between 0.5 and 0.6; consolidated to one value here per
+ *  the mix-pass spec — the differences were minor and not worth a second
+ *  table. */
+const GAIN_CAT_VOCAL = 0.55;
+/** Pickup dings + the weapon-acquired fanfare. */
+const GAIN_UI_DING = 0.45;
+// Heartbeat / low-hp vignette cue (tick()) is intentionally untouched by
+// this pass — it's diegetic player-state feedback, a different mix concern
+// from the combat SFX above, and nothing in the brief asked for it.
+
 /** Slice audio: most cues are still raw WebAudio synths (original work,
- *  license-clean). Six recorded CC0 cat-vocal samples layer in on top of /
- *  in place of specific synth cues (see the BUILD SPEC event map in the
- *  constructor below) — each keeps its synth equivalent as a decode-failure
- *  fallback. The context resumes on the first pointer-lock click (autoplay
- *  policy); sample fetch+decode is lazily kicked off from that same
- *  unlock() call and never before, so boot never waits on network audio and
- *  no fetch fires before the browser has granted an audio gesture. */
+ *  license-clean). Fourteen recorded CC0 samples layer in on top of / in
+ *  place of specific synth cues (see the event map in the constructor
+ *  below) — each keeps its synth equivalent as a fallback for either a
+ *  decode failure or a decode that comes back functionally silent. The
+ *  context resumes on the first pointer-lock click (autoplay policy);
+ *  sample fetch+decode is lazily kicked off from that same unlock() call
+ *  and never before, so boot never waits on network audio and no fetch
+ *  fires before the browser has granted an audio gesture. */
 export class SoundBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -39,10 +84,76 @@ export class SoundBus {
     'growl-heavy': '/assets/gen/audio/growl-heavy.mp3',
     'chirp-alert': '/assets/gen/audio/chirp-alert.mp3',
     'meow-victory': '/assets/gen/audio/meow-victory.mp3',
+    'shot-rifle': '/assets/gen/audio/shot-rifle.mp3',
+    'shot-shotgun': '/assets/gen/audio/shot-shotgun.mp3',
+    'shot-sniper': '/assets/gen/audio/shot-sniper.mp3',
+    'shot-smg': '/assets/gen/audio/shot-smg.mp3',
+    reload: '/assets/gen/audio/reload.mp3',
+    dryfire: '/assets/gen/audio/dryfire.mp3',
+    'impact-concrete': '/assets/gen/audio/impact-concrete.mp3',
+    'projectile-whoosh': '/assets/gen/audio/projectile-whoosh.mp3',
   };
-  /** ±3% pitch variation expressed in cents (1200 * log2(1.03) ≈ 51). */
+  /** Which recorded sample backs each weapon profile's 'weapon:fired'. */
+  private static readonly SHOT_SAMPLE_BY_PROFILE: Record<
+    'rifle' | 'shotgun' | 'sniper' | 'smg',
+    SampleName
+  > = {
+    rifle: 'shot-rifle',
+    shotgun: 'shot-shotgun',
+    sniper: 'shot-sniper',
+    smg: 'shot-smg',
+  };
+  /** ±3% pitch variation expressed in cents (1200 * log2(1.03) ≈ 51) —
+   *  default for every sample. */
   private static readonly DETUNE_RANGE_CENTS = 51;
+  /** ±4% (1200 * log2(1.04) ≈ 68) for the four gunshot samples — wider than
+   *  the vocal default specifically so rapid retrigger (SMG @ 900rpm, one
+   *  'weapon:fired' per shot) doesn't read as an obviously looped one-shot. */
+  private static readonly SAMPLE_DETUNE_OVERRIDES_CENTS: Partial<Record<SampleName, number>> = {
+    'shot-rifle': 68,
+    'shot-shotgun': 68,
+    'shot-sniper': 68,
+    'shot-smg': 68,
+  };
+  /** Default per-sample retrigger floor — fine for one-off cues (a cat
+   *  yowling, a pickup ding) where two plays inside a quarter-second would
+   *  just be flanging, not two distinct events. */
   private static readonly SAMPLE_MIN_GAP_MS = 250;
+  /** Per-sample overrides where the default would eat real events. SMG at
+   *  900rpm fires 15 times/sec (~66ms apart) — the 250ms default would
+   *  silently drop roughly every other shot's sample layer, so every gun
+   *  sample (and the full-auto dry-click, which can fire at the same
+   *  cadence on an empty mag) gets a 40ms floor instead: comfortably below
+   *  any weapon's real rate of fire, still enough to dedupe true audio
+   *  glitches (e.g. two collider surfaces hit in the same frame). */
+  private static readonly SAMPLE_MIN_GAP_OVERRIDES_MS: Partial<Record<SampleName, number>> = {
+    'shot-rifle': 40,
+    'shot-shotgun': 40,
+    'shot-sniper': 40,
+    'shot-smg': 40,
+    dryfire: 40,
+    'impact-concrete': 80, // BUILD SPEC value; also reused as the fallback-synth's own throttle floor (see weapon:impact handler)
+  };
+  /** Per-sample start offset, for trimming leading silence instead of
+   *  re-encoding the asset. shot-shotgun.mp3 has ~1.24s of near-silent
+   *  lead-in before the actual boom+pump — measured with
+   *  `ffmpeg -af silencedetect=noise=-30dB:d=0.05`, not eyeballed — so
+   *  playback starts just before the real transient instead of after a
+   *  sluggish dead-air gap. */
+  private static readonly SAMPLE_START_OFFSET_SEC: Partial<Record<SampleName, number>> = {
+    'shot-shotgun': 1.24,
+  };
+  /** Below this linear peak amplitude (~-40 dBFS) a "successfully decoded"
+   *  sample is treated as a broken generation rather than real audio.
+   *  Calibrated against the actual files, not guessed: the quietest
+   *  already-shipped vocal sample (chirp-alert) peaks at -38.9 dBFS and
+   *  must keep working, while several of this pass's new weapon SFX came
+   *  back from generation at -41 to -57 dBFS peak with no transient
+   *  structure at all under a spectrogram — just noise floor. Below the
+   *  line, status goes to 'failed' exactly like a real decode failure, so
+   *  the synth fallback takes over and a broken generation never ships as
+   *  if it were the "improved" sound. */
+  private static readonly MIN_SAMPLE_PEAK = 0.01;
 
   private samples = new Map<SampleName, SampleEntry>();
   private lastPlayedAt = new Map<SampleName, number>();
@@ -50,6 +161,12 @@ export class SoundBus {
   private samplesRequested = false;
   /** Every 3rd melee swipe alternates to hiss instead of meow-battle. */
   private meleeCount = 0;
+  /** Throttle floor for impactFallback() specifically — playSample() never
+   *  touches lastPlayedAt for a permanently-'failed' sample (it returns
+   *  'unavailable' before that point), so without this a wall full of
+   *  shotgun pellets would fire the fallback thud once per pellet per
+   *  frame with no rate limit at all. */
+  private lastImpactFallbackAt = -Infinity;
 
   /** Master volume 0..1 (settings menu). */
   setVolume(v: number): void {
@@ -58,11 +175,31 @@ export class SoundBus {
   }
 
   constructor() {
-    bus.on('weapon:fired', ({ profile }) => this.shot(profile));
-    bus.on('weapon:dry', () => this.click(1200, 0.04, 0.25));
-    bus.on('weapon:reload-start', () => this.click(700, 0.05, 0.3));
+    bus.on('weapon:fired', ({ profile }) => {
+      const sample = SoundBus.SHOT_SAMPLE_BY_PROFILE[profile];
+      if (this.playSample(sample, GAIN_PLAYER_SHOT) === 'unavailable') this.shot(profile);
+    });
+    bus.on('weapon:dry', () => {
+      if (this.playSample('dryfire', GAIN_RELOAD_DRY) === 'unavailable') {
+        this.click(1200, 0.04, 0.25);
+      }
+    });
+    bus.on('weapon:reload-start', () => {
+      if (this.playSample('reload', GAIN_RELOAD_DRY) === 'unavailable') {
+        this.click(700, 0.05, 0.3);
+      }
+    });
     bus.on('weapon:reload-end', () => this.click(1000, 0.05, 0.35));
     bus.on('weapon:switched', () => this.click(880, 0.04, 0.25));
+    bus.on('weapon:impact', () => {
+      if (this.playSample('impact-concrete', GAIN_IMPACT) === 'unavailable') {
+        const nowMs = performance.now();
+        const gap = SoundBus.SAMPLE_MIN_GAP_OVERRIDES_MS['impact-concrete'] ?? SoundBus.SAMPLE_MIN_GAP_MS;
+        if (nowMs - this.lastImpactFallbackAt < gap) return;
+        this.lastImpactFallbackAt = nowMs;
+        this.impactFallback();
+      }
+    });
     bus.on('enemy:hit', ({ killed, part }) => {
       if (killed) this.kill();
       else this.hit(part === 'head');
@@ -71,7 +208,14 @@ export class SoundBus {
     // it reuses the same hurt grunt as melee — no separate impact sound.
     bus.on('player:damaged', () => this.hurt());
     bus.on('player:died', () => this.death());
-    bus.on('enemy:fired', () => this.zap());
+    bus.on('enemy:fired', () => {
+      this.zap();
+      // Layer only, on purpose: zap() already fully covers this cue on its
+      // own (that's the pre-existing behaviour), so the whoosh sample gets
+      // no synth fallback of its own — if it's unavailable this just plays
+      // nothing extra, which is silently correct.
+      this.playSample('projectile-whoosh', GAIN_PROJECTILE_WHOOSH);
+    });
     bus.on('pickup:collected', ({ kind }) => this.pickup(kind));
     bus.on('weapon:acquired', () => this.weaponAcquired());
 
@@ -85,29 +229,29 @@ export class SoundBus {
     // route named in the brief instead: subscribe on the payload, fixed
     // volume, no falloff.
     bus.on('enemy:windup', () => {
-      if (this.playSample('chirp-alert', 0.55) === 'unavailable') this.windupChirp();
+      if (this.playSample('chirp-alert', GAIN_CAT_VOCAL) === 'unavailable') this.windupChirp();
     });
     bus.on('enemy:killed', () => {
       // Layered, not replaced: the existing kill-confirm tick above still
       // fires from 'enemy:hit' regardless — this adds the recorded yowl.
-      if (this.playSample('death-yowl', 0.6) === 'unavailable') this.deathYowlFallback();
+      if (this.playSample('death-yowl', GAIN_CAT_VOCAL) === 'unavailable') this.deathYowlFallback();
     });
     bus.on('enemy:spawned', ({ archetype }) => {
       if (archetype !== 'heavy') return;
-      if (this.playSample('growl-heavy', 0.5) === 'unavailable') this.growlFallback();
+      if (this.playSample('growl-heavy', GAIN_CAT_VOCAL) === 'unavailable') this.growlFallback();
     });
     bus.on('enemy:melee', () => {
       this.meleeCount++;
       const useHiss = this.meleeCount % 3 === 0;
       const name: SampleName = useHiss ? 'hiss' : 'meow-battle';
-      const result = this.playSample(name, useHiss ? 0.5 : 0.55);
+      const result = this.playSample(name, GAIN_CAT_VOCAL);
       if (result === 'unavailable') {
         if (useHiss) this.hissFallback();
         else this.meowBattleFallback();
       }
     });
     bus.on('wave:cleared', () => {
-      if (this.playSample('meow-victory', 0.6) === 'unavailable') this.victoryFallback();
+      if (this.playSample('meow-victory', GAIN_CAT_VOCAL) === 'unavailable') this.victoryFallback();
     });
   }
 
@@ -136,11 +280,12 @@ export class SoundBus {
     this.loadSamplesOnce();
   }
 
-  /** Fetch+decode the six recorded samples exactly once, kicked off only
-   *  from unlock() (i.e. only after a user gesture — never at boot). Not
-   *  awaited by the caller: gameplay never blocks on this, and any event
-   *  that fires before a given sample's decode resolves (or if it never
-   *  does) just plays that event's synth fallback instead. */
+  /** Fetch+decode the fourteen recorded samples exactly once, kicked off
+   *  only from unlock() (i.e. only after a user gesture — never at boot).
+   *  Not awaited by the caller: gameplay never blocks on this, and any
+   *  event that fires before a given sample's decode resolves (or if it
+   *  never does, or if it decodes to near-silence — see MIN_SAMPLE_PEAK)
+   *  just plays that event's synth fallback instead. */
   private loadSamplesOnce(): void {
     if (this.samplesRequested || !this.ctx) return;
     this.samplesRequested = true;
@@ -154,8 +299,20 @@ export class SoundBus {
         })
         .then((data) => ctx.decodeAudioData(data))
         .then((buffer) => {
+          const peak = SoundBus.samplePeak(buffer);
+          console.debug(`[SoundBus] decoded sample "${name}" (peak ${peak.toFixed(3)})`);
+          if (peak < SoundBus.MIN_SAMPLE_PEAK) {
+            this.samples.set(name, { status: 'failed' });
+            if (!this.warnedSamples.has(name)) {
+              this.warnedSamples.add(name);
+              console.warn(
+                `[SoundBus] sample "${name}" decoded but is near-silent (peak ${peak.toFixed(3)}, ` +
+                  `floor ${SoundBus.MIN_SAMPLE_PEAK}) — treating as a broken generation, using synth fallback instead`,
+              );
+            }
+            return;
+          }
           this.samples.set(name, { status: 'loaded', buffer });
-          console.debug(`[SoundBus] decoded sample "${name}"`);
         })
         .catch((err: unknown) => {
           this.samples.set(name, { status: 'failed' });
@@ -167,12 +324,29 @@ export class SoundBus {
     }
   }
 
+  /** Peak absolute sample value across every channel. Runs once per sample
+   *  at decode time (never per-frame) — cost is a single linear scan of a
+   *  1-2.5s buffer, not a hot-path concern. */
+  private static samplePeak(buffer: AudioBuffer): number {
+    let peak = 0;
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        const v = Math.abs(data[i] ?? 0);
+        if (v > peak) peak = v;
+      }
+    }
+    return peak;
+  }
+
   /** Play a decoded sample through the master bus with a small random
-   *  detune and a per-sample 250ms throttle (never the same sample twice
-   *  inside that window). Returns 'unavailable' when the sample never
-   *  decoded (still loading, or failed) so the caller can play its synth
-   *  fallback instead; returns 'throttled' when it decoded fine but was
-   *  rate-limited — that case plays nothing, on purpose, no fallback. */
+   *  detune and a per-sample retrigger throttle (see
+   *  SAMPLE_MIN_GAP_OVERRIDES_MS — never the same sample twice inside that
+   *  window). Returns 'unavailable' when the sample never decoded to usable
+   *  audio (still loading, failed, or gated as near-silent) so the caller
+   *  can play its synth fallback instead; returns 'throttled' when it
+   *  decoded fine but was rate-limited — that case plays nothing, on
+   *  purpose, no fallback. */
   private playSample(name: SampleName, volume: number): PlayResult {
     const ctx = this.ctx;
     const out = this.master;
@@ -183,16 +357,20 @@ export class SoundBus {
 
     const nowMs = performance.now();
     const lastAt = this.lastPlayedAt.get(name) ?? -Infinity;
-    if (nowMs - lastAt < SoundBus.SAMPLE_MIN_GAP_MS) return 'throttled';
+    const minGap = SoundBus.SAMPLE_MIN_GAP_OVERRIDES_MS[name] ?? SoundBus.SAMPLE_MIN_GAP_MS;
+    if (nowMs - lastAt < minGap) return 'throttled';
     this.lastPlayedAt.set(name, nowMs);
+
+    const detune = SoundBus.SAMPLE_DETUNE_OVERRIDES_CENTS[name] ?? SoundBus.DETUNE_RANGE_CENTS;
+    const offset = SoundBus.SAMPLE_START_OFFSET_SEC[name] ?? 0;
 
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    src.detune.value = (Math.random() * 2 - 1) * SoundBus.DETUNE_RANGE_CENTS;
+    src.detune.value = (Math.random() * 2 - 1) * detune;
     const gain = ctx.createGain();
     gain.gain.value = volume;
     src.connect(gain).connect(out);
-    src.start(this.now());
+    src.start(this.now(), offset);
     return 'played';
   }
 
@@ -200,9 +378,11 @@ export class SoundBus {
     return this.ctx?.currentTime ?? 0;
   }
 
-  /** Gunshot: white-noise crack through a falling lowpass + a thump.
-   *  Per-gun flavour: shotgun = longer/deeper boom, sniper = sharper crack,
-   *  smg = the rifle pattern shortened and pitched up (900 rpm chatter). */
+  /** Gunshot synth fallback (used when the matching shot-* sample hasn't
+   *  decoded, failed, or gated as near-silent): white-noise crack through a
+   *  falling lowpass + a thump. Per-gun flavour: shotgun = longer/deeper
+   *  boom, sniper = sharper crack, smg = the rifle pattern shortened and
+   *  pitched up (900 rpm chatter). */
   private shot(profile: 'rifle' | 'shotgun' | 'sniper' | 'smg'): void {
     const ctx = this.ctx;
     const out = this.master;
@@ -267,25 +447,58 @@ export class SoundBus {
   }
 
   /** Enemy projectile away: quick falling zap/pew — a pure-tone sweep, so
-   *  it never reads as a player gun (those are noise-crack + thump). */
+   *  it never reads as a player gun (those are noise-crack + thump). The
+   *  projectile-whoosh sample layers under this (see enemy:fired handler);
+   *  this synth always plays regardless of that sample's availability. */
   private zap(): void {
     this.tone(1700, 0.09, 0.4, 'sawtooth', 260);
+  }
+
+  /** Fallback for weapon:impact when impact-concrete didn't decode to
+   *  usable audio (still loading, failed, or near-silent). Bullet-hits-wall
+   *  had no dedicated sound at all before this pass — impacts.spawn() only
+   *  ever drove the dust-mote particles — so there's no prior synth to
+   *  reuse; this is new, built the same noise-through-lowpass shape as the
+   *  other cues in this file, just shorter/duller/quieter (a knock, not a
+   *  gunshot). Throttled by the caller (weapon:impact handler above), not
+   *  here — a shotgun's 8 pellets can all hit the same wall in one frame. */
+  private impactFallback(): void {
+    const ctx = this.ctx;
+    const out = this.master;
+    if (!ctx || !out) return;
+    const t = this.now();
+    const len = 0.05;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(GAIN_IMPACT, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    noise.connect(lp).connect(g).connect(out);
+    noise.start(t);
   }
 
   /** Pickup collected: bright rising ding — ammo pitched a touch higher
    *  than health, distinct enough without needing a whole second timbre. */
   private pickup(kind: 'health' | 'ammo'): void {
     const base = kind === 'ammo' ? 1320 : 1046;
-    this.tone(base, 0.05, 0.4, 'sine', base * 1.5);
-    setTimeout(() => this.tone(base * 1.5, 0.08, 0.35, 'sine'), 45);
+    this.tone(base, 0.05, GAIN_UI_DING, 'sine', base * 1.5);
+    setTimeout(() => this.tone(base * 1.5, 0.08, GAIN_UI_DING * 0.8, 'sine'), 45);
   }
 
   /** New gun off the ground: quick rising three-note riff — the victory
    *  ding family (kill confirm / pickup), stretched into a little fanfare. */
   private weaponAcquired(): void {
-    this.tone(660, 0.07, 0.4, 'square', 880);
-    setTimeout(() => this.tone(990, 0.07, 0.4, 'square'), 70);
-    setTimeout(() => this.tone(1320, 0.12, 0.45, 'square', 1760), 140);
+    this.tone(660, 0.07, GAIN_UI_DING * 0.9, 'square', 880);
+    setTimeout(() => this.tone(990, 0.07, GAIN_UI_DING * 0.9, 'square'), 70);
+    setTimeout(() => this.tone(1320, 0.12, GAIN_UI_DING, 'square', 1760), 140);
   }
 
   /** Player hurt: short low grunt. */
@@ -338,7 +551,7 @@ export class SoundBus {
     osc.stop(t + dur + 0.02);
   }
 
-  // --- synth fallbacks for the recorded samples above ------------------
+  // --- synth fallbacks for the recorded cat-vocal samples ---------------
   // Each mirrors the register/character of its recorded counterpart so a
   // failed decode degrades gracefully instead of going silent.
 

@@ -325,8 +325,9 @@ export class WeaponSystem {
             totalOnCat += dmg;
           }
         } else {
-          // Static world geometry: leave a mark.
+          // Static world geometry: leave a mark + let SoundBus know (impact thud).
           this.decals.place(_hit.px, _hit.py, _hit.pz, _hit.nx, _hit.ny, _hit.nz);
+          bus.emit('weapon:impact', { x: _hit.px, y: _hit.py, z: _hit.pz });
         }
         // Punch through: continue from just past the hit.
         ox = _hit.px + _shot.x * 0.06;

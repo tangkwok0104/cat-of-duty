@@ -49,7 +49,7 @@ export class Viewmodel {
   swayX = 0;
   swayY = 0;
 
-  private static readonly HIP = { x: 0.17, y: -0.15, z: -0.34, roll: 0.03 };
+  private static readonly HIP = { x: 0.3, y: -0.3, z: -0.32, roll: 0.06 };
   private static readonly ADS = { x: 0, y: -0.088, z: -0.26, roll: 0 };
 
   constructor(camera: PerspectiveCamera, configs: readonly WeaponConfig[]) {
@@ -60,6 +60,7 @@ export class Viewmodel {
       this.group.add(gun);
       this.loadRealModel(cfg);
     }
+    this.loadPaw(configs);
 
     this.flashLight = new PointLight(0xffc46e, 0, 7, 2);
     const flashMat = new MeshStandardMaterial({
@@ -199,6 +200,39 @@ export class Viewmodel {
       })
       .catch((err: unknown) => {
         console.error(`[Viewmodel] failed to load model "${vm.file}" for ${cfg.id}`, err);
+      });
+  }
+
+  /** Fire-and-forget: fetch paw.glb exactly ONCE (loadModel's cache makes
+   *  every call after the first a no-op network-wise) then clone one
+   *  instance per gun that opts in via `viewModel.paw`. Attached straight
+   *  to the per-gun `gun` group — a sibling of the placeholder/modelHolder
+   *  — so it's visible immediately (no GLB-swap wait) and inherits every
+   *  bit of that group's motion (sway/recoil/dip) plus the scope-hides-
+   *  viewmodel visibility toggle in WeaponSystem for free. */
+  private loadPaw(configs: readonly WeaponConfig[]): void {
+    loadModel('paw')
+      .then((gltf) => {
+        for (const cfg of configs) {
+          const pawCfg = cfg.viewModel.paw;
+          if (!pawCfg) continue; // this gun ships corner-anchored, no grip prop
+          const gun = this.guns.get(cfg.id);
+          if (!gun) continue; // Viewmodel torn down before load finished
+          const paw = gltf.scene.clone(true);
+          paw.traverse((obj) => {
+            if (obj instanceof Mesh) {
+              obj.castShadow = false;
+              obj.frustumCulled = false; // hugs the near plane; never cull it
+            }
+          });
+          paw.position.set(pawCfg.position[0], pawCfg.position[1], pawCfg.position[2]);
+          paw.rotation.set(pawCfg.rotation[0], pawCfg.rotation[1], pawCfg.rotation[2]);
+          paw.scale.setScalar(pawCfg.scale);
+          gun.add(paw);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('[Viewmodel] failed to load paw.glb', err);
       });
   }
 

@@ -16,6 +16,57 @@
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
+## Combat Wave 4C — damage feedback, weapon audio, paw viewmodel, diet cat (2026-08-09)
+
+(Session crashed mid-verification; all gates re-run clean on resume.)
+
+**Enemy damage feedback** (`enemies/CatOverlays.ts`, new): pooled
+world-space HP bars above damaged cats (canvas sprites, redraw only on
+hp change, green→amber→red through the HUD's own color tokens) +
+floating damage numbers on hit (spawn at head height regardless of hit
+part, rise+fade 0.7 s, jittered so bursts don't stack, headshot 1.4× in
+accent amber, kill 1.15× in danger red). Purely presentational — reads
+GameState/EventBus, writes nothing back; deliberately NOT bloomed.
+Playtest ask this answers: headshots weren't reading as 2×, and cats
+had no visible health at all.
+
+**Weapon audio integration** (SoundBus +303): the 8 recorded weapon
+samples wired in — per-gun shots via a profile→sample map (incl. smg),
+reload foley, dryfire click, concrete impact on the new
+`weapon:impact` event (WeaponSystem emits at the decal point on static
+geometry hits), projectile whoosh layered UNDER the existing zap so
+"incoming fire" still reads the same. Central gain mix table
+(player shots 0.9 loudest by design → impact texture 0.35 quietest);
+±4% detune on gunshots (vs ±3% default) so 900 rpm SMG retrigger
+doesn't read as a loop; per-sample retrigger floors with an SMG
+override. **Silent-generation guard**: decode-time peak check
+(MIN_SAMPLE_PEAK 0.01) auto-gates broken generations to their synth
+fallbacks — caught 4 of 8 (shot-smg, reload, impact-concrete,
+projectile-whoosh, all −41 to −57 dBFS). Logged in CREDITS.md;
+regenerate via a real SFX pipeline later. Audio never silently missing
+or silently broken.
+
+**Paw viewmodel**: `paw.glb` grip prop loaded once, cloned onto each
+gun via per-gun `viewModel.paw` transform in WeaponConfig (opt-out per
+gun by omission); attached to the gun group so it inherits
+sway/recoil/dip and the scope-hides-viewmodel toggle for free. HIP
+anchor moved outward/down (0.17,−0.15 → 0.3,−0.3) for a proper
+corner-anchored FPS silhouette.
+
+**Diet cat**: `catsoldier.glb` swapped for a lower-poly re-export of
+the same generation — 25,866 → 10,417 tris, bones/bbox/clips/texture
+verified identical by rig diff (`.tmp/lite-rig-diff-debug2.log`).
+Original preserved in git history.
+
+Gates (re-run post-crash): tsc clean both configs, vite build green,
+loop-integrity 14/14 ×2 with 0 console errors, SoundBus probe PASS
+(all 14 samples decode, 4 correctly auto-gated), CatOverlays screenshot
+QA 0 errors. Perf mid-combat wave 5, 5 cats + heavy, ULTRA on the dev
+M5 Pro: 120 fps, 8.34 ms avg / 8.80 ms p95, 131 draws, 343k tris,
+heap 215 MB — frame time better than pre-swap. Needs one human pass:
+sound mix levels on real headphones (gain table values are
+first-listen starting points).
+
 ## Combat Wave 4B — Arsenal (2026-08-09)
 
 Progression: runs start RIFLE-ONLY (`WeaponState.owned`, reset on

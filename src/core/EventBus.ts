@@ -21,6 +21,10 @@ export interface Events {
   'weapon:reload-start': Record<string, never>;
   'weapon:reload-end': Record<string, never>;
   'weapon:switched': { slot: number; name: string };
+  /** A shot hit static world geometry (wall/pillar/crate) — impact thud +
+   *  where ImpactBurst/Decals already fire (this rides the same hit point).
+   *  Cats have their own 'enemy:hit' cue instead; this is concrete, not fur. */
+  'weapon:impact': { x: number; y: number; z: number };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
   /** A cat entered the field (heavy spawns get a growl). */
