@@ -415,7 +415,33 @@
   width: 100vh;
   height: 100vh;
   transform: translate(-50%, -50%);
-  color: rgba(233, 230, 215, 0.85);
+}
+
+/* Star reticle: thin crosshair + mil-dot ticks + 4-point star center.
+   Each stroked element is drawn twice (see Hud.ts) — a --c-bg backer
+   painted first, then a thinner --c-text line on top — giving every
+   line a subtle dark outline so it stays legible against bright sky. */
+.scope-outline {
+  fill: none;
+  stroke: var(--c-bg);
+  opacity: 0.85;
+}
+
+.scope-ink {
+  fill: none;
+  stroke: var(--c-text);
+}
+
+.scope-rim {
+  opacity: 0.55;
+}
+
+.scope-star {
+  fill: var(--c-text);
+  stroke: var(--c-bg);
+  stroke-width: 0.5;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
 }
 
 /* ---- Death screen ---- */

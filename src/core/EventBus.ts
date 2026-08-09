@@ -23,6 +23,12 @@ export interface Events {
   'weapon:switched': { slot: number; name: string };
   /** A cat took damage. */
   'enemy:hit': { id: number; part: 'head' | 'body'; damage: number; killed: boolean };
+  /** A cat entered the field (heavy spawns get a growl). */
+  'enemy:spawned': { id: number; archetype: import('./GameState').CatArchetype };
+  /** A rusher/heavy started a claw swipe (battle meow + swipe anim). */
+  'enemy:melee': { id: number };
+  /** The field just went clear (victory meow; next wave after the breather). */
+  'wave:cleared': { wave: number };
   /** A ranged cat started its telegraph (audio cue — the fair-warning chirp). */
   'enemy:windup': { id: number; x: number; z: number };
   /** A ranged cat fired a projectile (muzzle sound, minimap ping). */

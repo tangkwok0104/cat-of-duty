@@ -16,6 +16,23 @@
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
+## Combat Wave 4A (2026-08-09) — animation + voice + reticle polish
+
+Death clips per style (shot = backward arch, headshot = forward slam),
+hit-react replaces the tilt jolt, melee plays the strike slice of the
+kung-fu clip (full clip had root motion that would slide the mesh — caught
+by clip scrub), rushers sprint via the in-place run clip (>2.2 m/s), clip
+priority death>melee>hit>locomotion on a two-slot overlay layer. New
+events: enemy:spawned / enemy:melee / wave:cleared. Real cat vocals:
+6 MP3 samples decode after gesture-unlock, ±3% detune, 250ms throttle,
+synth fallbacks kept — windup chirp, death yowl (layered), heavy spawn
+growl, melee meow (every 3rd a hiss), victory meow on wave clear. Sniper
+scope: mil-spec star reticle (mil-dot arms, 45° star, outlined for bright
+sky). Viewmodels shrunk ~23% + inward yaw — barrel now points at the
+crosshair. Gates: tsc 0 (both tsconfigs), build green, loop 14/14 ×2,
+perf no regression (orbit p95 17.3 vs 18.1 baseline; combat identical).
+Needs one human pass: run-clip foot-slide feel + sound mix levels.
+
 ## Combat Wave 3 (2026-08-09) — GLB integration (the visual transformation)
 
 Real gun viewmodels (rifle/shotgun/sniper GLBs; per-gun transforms

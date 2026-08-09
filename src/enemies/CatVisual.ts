@@ -8,16 +8,19 @@ import {
   ConeGeometry,
   CylinderGeometry,
   Group,
+  LoopOnce,
   Material,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   SphereGeometry,
   Vector3,
+  type AnimationAction,
   type AnimationClip,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone as cloneWithSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadModel } from '../core/Assets';
 import type { CatArchetype, CatData } from '../core/GameState';
 import { ARCHETYPES, type EnemyArchetype } from './EnemyConfig';
@@ -26,10 +29,12 @@ import { ARCHETYPES, type EnemyArchetype } from './EnemyConfig';
  *
  *  1. GLB path (preferred): a SkeletonUtils clone of the generated rigged
  *     cat soldier (catsoldier.glb — grey tabby, helmet, vest, boots) driven
- *     by walk/idle clips retargeted from catsoldier-walk/-idle.glb. The
- *     three files share one rig (verified: identical bone names, retarget
- *     probe .tmp/rig-retarget.ts) — the -walk/-idle files carry the clips
- *     but only low-poly proxy meshes, so the MESH comes from catsoldier.glb.
+ *     by clips retargeted from the catsoldier-*.glb files (walk/idle
+ *     required; run, death-back, death-fwd, hit, attack individually
+ *     optional). All files share one rig (verified: identical bone names,
+ *     retarget probe .tmp/rig-retarget.ts) — the clip files carry only
+ *     low-poly proxy meshes, so the MESH comes from catsoldier.glb.
+ *     Clip priority per frame: death > melee swipe > hit-react > locomotion.
  *  2. Procedural fallback: the previous primitives build, kept for the time
  *     before the lazy model load resolves and for when the GLBs 404.
  *
@@ -70,9 +75,29 @@ const SOLDIER_EYE_FLARE = 8; // windup telegraph peak
 /** Distance the walk clip covers per playback second at timeScale 1 —
  *  drives timeScale = cat.speed / this so feet roughly match the ground. */
 const WALK_METERS_PER_SEC = 1.4;
+/** Same idea for the run clip (in-place variant, no root motion) — a
+ *  screenshot-tuned guess at the stride speed the gallop cycle reads as. */
+const RUN_METERS_PER_SEC = 3.0;
+/** Cats faster than this sprint (run clip). Rushers (2.4–3.2) qualify;
+ *  gunners (≤2.0) and heavies (≤1.3) keep walking. */
+const RUN_SPEED_MIN = 2.2;
 /** Below this ground speed the cat is "holding position" → idle clip. */
 const IDLE_SPEED_EPS = 0.35;
 const XFADE_TIME = 0.15; // walk<->idle crossfade seconds
+const OVERLAY_XFADE = 0.08; // one-shot overlays (death/melee/hit) fade s
+/** Contract with CatSystem's MELEE_ANIM_TIME: the swipe slice of the attack
+ *  clip is fit into this window so the strike reads as damage lands. */
+const MELEE_SWIPE_SECONDS = 0.6;
+/** Kung_Fu_Punch (7.33s) is a whole combo with heavy root motion — from
+ *  ~1.5s the character leaves its origin (jump kick) and never returns,
+ *  which would slide the mesh off the cat's logical position. Only the
+ *  centered step-punch slice is played (scrub sheet:
+ *  .tmp/clip-scrub/catsoldier-attack-sheet.png). */
+const ATTACK_CLIP_START = 0.9;
+const ATTACK_CLIP_WINDOW = 0.8; // clip-seconds shown across the swipe
+/** Hit_Reaction is ~1s but flinch is 0.15s — speed it up so the visible
+ *  slice is the head-snap, not a slow lean-in. */
+const HIT_REACT_TIMESCALE = 1.6;
 const MAX_FRAME_DT = 0.1; // clamp big gaps (tab-out, hitches)
 
 /** Archetype fur tints multiplied into the master texture. Rusher keeps the
@@ -90,6 +115,13 @@ interface SoldierAssets {
   master: Object3D;
   walkClip: AnimationClip;
   idleClip: AnimationClip;
+  /** Optional clips (null = that GLB failed to load / carried no clip —
+   *  each animation degrades to the pre-clip behaviour independently). */
+  runClip: AnimationClip | null;
+  deathBackClip: AnimationClip | null;
+  deathFwdClip: AnimationClip | null;
+  hitClip: AnimationClip | null;
+  attackClip: AnimationClip | null;
   /** Uniform rig scale that puts the measured head centre at HEAD_HITBOX_Y. */
   baseScale: number;
   headBoneName: string | null;
@@ -180,20 +212,40 @@ function buildTintMap(master: Object3D, tint: number | null): Map<Material, Mate
 }
 
 // Lazy fire-and-forget load — never gates state.ready or the boot screen.
-// On any failure (404, malformed file) soldierAssets stays null and every
-// cat keeps the procedural body.
+// On any failure (404, malformed file) of the three REQUIRED files soldier
+// assets stay null and every cat keeps the procedural body. The five newer
+// clip GLBs are individually optional: each failure only degrades that one
+// animation back to its pre-clip behaviour (keel-over death, tilt flinch,
+// walk-paced sprint, no swipe).
+const optionalModel = (name: string): Promise<GLTF | null> =>
+  loadModel(name).catch((err: unknown) => {
+    console.warn(`[CatVisual] optional ${name}.glb unavailable — that animation degrades`, err);
+    return null;
+  });
+
 void Promise.all([
   loadModel('catsoldier'),
   loadModel('catsoldier-walk'),
   loadModel('catsoldier-idle'),
+  optionalModel('catsoldier-run'),
+  optionalModel('catsoldier-death-back'),
+  optionalModel('catsoldier-death-fwd'),
+  optionalModel('catsoldier-hit'),
+  optionalModel('catsoldier-attack'),
 ])
-  .then(([masterGltf, walkGltf, idleGltf]) => {
+  .then(([masterGltf, walkGltf, idleGltf, runGltf, deathBackGltf, deathFwdGltf, hitGltf, attackGltf]) => {
     const walkClip = walkGltf.animations[0];
     const idleClip = idleGltf.animations[0];
     if (!walkClip || !idleClip) {
       console.warn('[CatVisual] soldier GLBs missing clips — keeping procedural cats');
       return;
     }
+    const clipOf = (gltf: GLTF | null, name: string): AnimationClip | null => {
+      if (!gltf) return null; // load failure already warned above
+      const clip = gltf.animations[0] ?? null;
+      if (!clip) console.warn(`[CatVisual] ${name}.glb carries no clip — that animation degrades`);
+      return clip;
+    };
     const master = masterGltf.scene;
     master.updateMatrixWorld(true);
 
@@ -223,6 +275,11 @@ void Promise.all([
       master,
       walkClip,
       idleClip,
+      runClip: clipOf(runGltf, 'catsoldier-run'),
+      deathBackClip: clipOf(deathBackGltf, 'catsoldier-death-back'),
+      deathFwdClip: clipOf(deathFwdGltf, 'catsoldier-death-fwd'),
+      hitClip: clipOf(hitGltf, 'catsoldier-hit'),
+      attackClip: clipOf(attackGltf, 'catsoldier-attack'),
       baseScale,
       headBoneName: headBone ? headBone.name : null,
       eyeLocalL,
@@ -235,16 +292,35 @@ void Promise.all([
       },
     };
     // One-line load diagnostic (counterpart of the failure warns below):
-    // headBone null or tint 0 here means cats will render un-tinted/eyeless.
+    // headBone null or tint 0 here means cats will render un-tinted/eyeless;
+    // a clip listed as 'none' means that animation runs degraded.
+    const dur = (c: AnimationClip | null): string => (c ? c.duration.toFixed(2) : 'none');
     console.debug(
       `[CatVisual] soldier GLBs ready — headBone=${soldierAssets.headBoneName ?? 'NONE'}`,
       `baseScale=${baseScale.toFixed(4)}`,
       `tints g=${soldierAssets.tints.gunner.size} h=${soldierAssets.tints.heavy.size}`,
+      `clips run=${dur(soldierAssets.runClip)} deathBack=${dur(soldierAssets.deathBackClip)}`,
+      `deathFwd=${dur(soldierAssets.deathFwdClip)} hit=${dur(soldierAssets.hitClip)}`,
+      `attack=${dur(soldierAssets.attackClip)}`,
     );
   })
   .catch((err: unknown) => {
     console.warn('[CatVisual] soldier GLBs unavailable — keeping procedural cats', err);
   });
+
+/** Bind an action to the mixer NOW (play+stop caches its property bindings)
+ *  so triggering it later mid-combat allocates nothing. */
+function primeAction(action: AnimationAction): AnimationAction {
+  action.play();
+  action.stop();
+  return action;
+}
+
+function primeOneShot(action: AnimationAction): AnimationAction {
+  action.setLoop(LoopOnce, 1);
+  action.clampWhenFinished = true; // hold the final pose during fade/despawn
+  return primeAction(action);
+}
 
 function buildSoldierVisual(
   assets: SoldierAssets,
@@ -305,10 +381,34 @@ function buildSoldierVisual(
   // Desync gait across the wave: offset each cat's clip phase by id.
   walk.time = (id * 0.37) % assets.walkClip.duration;
   idle.time = (id * 0.53) % assets.idleClip.duration;
-  let walkWeight = 1;
+  let locoRatio = 1; // walk/run (1) vs idle (0) blend
   walk.setEffectiveWeight(1);
   idle.setEffectiveWeight(0);
   walk.setEffectiveTimeScale(1);
+
+  // All optional actions are built + bound NOW — triggering them later in
+  // combat allocates nothing (prime* caches the mixer's property bindings).
+  const run = assets.runClip ? primeAction(mixer.clipAction(assets.runClip)) : null;
+  const runTimeOffset = assets.runClip ? (id * 0.41) % assets.runClip.duration : 0;
+  const deathBack = assets.deathBackClip
+    ? primeOneShot(mixer.clipAction(assets.deathBackClip))
+    : null;
+  const deathFwd = assets.deathFwdClip
+    ? primeOneShot(mixer.clipAction(assets.deathFwdClip))
+    : null;
+  const hitReact = assets.hitClip ? primeOneShot(mixer.clipAction(assets.hitClip)) : null;
+  const attack = assets.attackClip ? primeOneShot(mixer.clipAction(assets.attackClip)) : null;
+  if (hitReact) hitReact.setEffectiveTimeScale(HIT_REACT_TIMESCALE);
+  // The swipe plays clip range [attackStart, attackStart+window] across the
+  // 0.6s melee window (clamped in case the clip is ever swapped for a
+  // shorter one). The overlay fade-out cuts it before the combo continues.
+  let attackStart = 0;
+  if (attack && assets.attackClip) {
+    const dur = assets.attackClip.duration;
+    attackStart = Math.min(ATTACK_CLIP_START, Math.max(0, dur - ATTACK_CLIP_WINDOW));
+    const window = Math.min(ATTACK_CLIP_WINDOW, dur - attackStart);
+    attack.setEffectiveTimeScale(window > 1e-3 ? window / MELEE_SWIPE_SECONDS : 1);
+  }
 
   const totalWindup = archetype.ranged?.windup ?? 0.45;
 
@@ -316,6 +416,17 @@ function buildSoldierVisual(
   let prevNow = Number.NaN;
   let prevX = Number.NaN;
   let prevZ = Number.NaN;
+  let prevFlinch = 0;
+  let prevMelee = 0;
+  let locoAction = walk;
+  let locoMps = WALK_METERS_PER_SEC;
+  // One-shot overlay layer: `overlayIn` rises toward weight 1, `overlayOut`
+  // fades toward 0; locomotion takes whatever weight is left. Priority
+  // (death > melee > hit > locomotion) is encoded in the `desired` pick.
+  let overlayIn: AnimationAction | null = null;
+  let overlayOut: AnimationAction | null = null;
+  let inW = 0;
+  let outW = 0;
 
   function update(cat: CatData, nowS: number): void {
     group.position.set(cat.x, cat.y, cat.z);
@@ -324,53 +435,126 @@ function buildSoldierVisual(
     const dt = Number.isNaN(prevNow) ? 0 : Math.min(Math.max(nowS - prevNow, 0), MAX_FRAME_DT);
     prevNow = nowS;
 
+    // The clip that should own the body this frame (null = locomotion).
+    let desired: AnimationAction | null = null;
+
     if (cat.phase === 'dying') {
-      // Mixer deliberately not updated — the pose freezes at the moment of
-      // death, then the body keels over sideways and sinks; eyes fade out.
-      const fall = Math.min(1, cat.deadFor / FALL_TIME);
-      group.rotation.z = (Math.PI / 2) * fall;
+      // Sink + eye-fade timeline is shared with the fallback; only the FALL
+      // differs — the death clip does the falling when we have one.
       const sink = Math.max(0, cat.deadFor - FALL_TIME) * 0.12;
       group.position.y = cat.y - sink;
-      const fade = Math.max(0, 1 - cat.deadFor / DESPAWN_AFTER);
-      eyeMat.emissiveIntensity = SOLDIER_EYE_BASE * fade;
-      return;
-    }
-
-    // Whole-body jerk on a fresh hit.
-    group.rotation.z = cat.flinch > 0 ? Math.sin(nowS * 70) * 0.08 : 0;
-
-    // Walk vs idle from actual displacement: a gunner holding preferred
-    // range stands (idle), anything covering ground walks.
-    let moving = true;
-    if (dt > 0 && !Number.isNaN(prevX)) {
-      const dx = cat.x - prevX;
-      const dz = cat.z - prevZ;
-      moving = Math.sqrt(dx * dx + dz * dz) / dt > IDLE_SPEED_EPS;
-    }
-    prevX = cat.x;
-    prevZ = cat.z;
-
-    const target = moving ? 1 : 0;
-    if (walkWeight !== target) {
-      const step = dt / XFADE_TIME;
-      walkWeight =
-        target > walkWeight
-          ? Math.min(target, walkWeight + step)
-          : Math.max(target, walkWeight - step);
-      walk.setEffectiveWeight(walkWeight);
-      idle.setEffectiveWeight(1 - walkWeight);
-    }
-    // Feet pace matches ground speed (cat.speed varies per cat).
-    walk.setEffectiveTimeScale(cat.speed / WALK_METERS_PER_SEC);
-
-    // Windup telegraph: eyes flare toward the shot — the fairness window.
-    if (cat.windup > 0) {
-      const progress = 1 - Math.min(1, cat.windup / totalWindup);
       eyeMat.emissiveIntensity =
-        SOLDIER_EYE_BASE + progress * (SOLDIER_EYE_FLARE - SOLDIER_EYE_BASE);
+        SOLDIER_EYE_BASE * Math.max(0, 1 - cat.deadFor / DESPAWN_AFTER);
+      // Preferred style first, the other as stand-in if that GLB 404'd.
+      const death = (cat.deathStyle === 1 ? deathFwd : deathBack) ?? deathFwd ?? deathBack;
+      if (!death) {
+        // Degraded death (no clips): freeze the pose, keel over sideways.
+        group.rotation.z = (Math.PI / 2) * Math.min(1, cat.deadFor / FALL_TIME);
+        return; // mixer deliberately not updated
+      }
+      group.rotation.z = 0; // the clip owns the fall — no group keel-over
+      desired = death;
     } else {
-      eyeMat.emissiveIntensity = SOLDIER_EYE_BASE;
+      // Legacy whole-body tilt jolt only when the hit clip is unavailable.
+      group.rotation.z = !hitReact && cat.flinch > 0 ? Math.sin(nowS * 70) * 0.08 : 0;
+
+      // Fast cats sprint. Speed is fixed per cat, so this swap runs at most
+      // once (walk→run on the first update) — never back.
+      if (run && locoAction !== run && cat.speed > RUN_SPEED_MIN) {
+        locoAction.setEffectiveWeight(0);
+        locoAction.stop();
+        locoAction = run;
+        locoMps = RUN_METERS_PER_SEC;
+        run.play();
+        run.time = runTimeOffset;
+      }
+
+      // Walk/run vs idle from actual displacement: a gunner holding
+      // preferred range stands (idle), anything covering ground strides.
+      let moving = true;
+      if (dt > 0 && !Number.isNaN(prevX)) {
+        const dx = cat.x - prevX;
+        const dz = cat.z - prevZ;
+        moving = Math.sqrt(dx * dx + dz * dz) / dt > IDLE_SPEED_EPS;
+      }
+      prevX = cat.x;
+      prevZ = cat.z;
+
+      const target = moving ? 1 : 0;
+      if (locoRatio !== target) {
+        const step = dt / XFADE_TIME;
+        locoRatio =
+          target > locoRatio
+            ? Math.min(target, locoRatio + step)
+            : Math.max(target, locoRatio - step);
+      }
+      // Feet pace matches ground speed (cat.speed varies per cat).
+      locoAction.setEffectiveTimeScale(cat.speed / locoMps);
+
+      // Windup telegraph: eyes flare toward the shot — the fairness window.
+      if (cat.windup > 0) {
+        const progress = 1 - Math.min(1, cat.windup / totalWindup);
+        eyeMat.emissiveIntensity =
+          SOLDIER_EYE_BASE + progress * (SOLDIER_EYE_FLARE - SOLDIER_EYE_BASE);
+      } else {
+        eyeMat.emissiveIntensity = SOLDIER_EYE_BASE;
+      }
+
+      // Overlay priority below death: melee swipe beats hit-react.
+      if (cat.meleeAnim > 0 && attack) desired = attack;
+      else if (cat.flinch > 0 && hitReact) desired = hitReact;
+
+      // A FRESH hit/swipe while the same overlay is still up restarts it
+      // (rifle fire re-flinches faster than the clip finishes).
+      if (desired !== null && desired === overlayIn) {
+        if (desired === hitReact && cat.flinch > prevFlinch) desired.reset();
+        else if (desired === attack && cat.meleeAnim > prevMelee) {
+          desired.reset();
+          desired.time = attackStart;
+        }
+      }
     }
+    prevFlinch = cat.flinch;
+    prevMelee = cat.meleeAnim;
+
+    // Overlay slot bookkeeping (manual weights — no fadeIn/fadeOut
+    // interpolant scheduling, fully allocation-free).
+    if (desired !== overlayIn) {
+      if (overlayOut && overlayOut !== desired) {
+        overlayOut.setEffectiveWeight(0);
+        overlayOut.stop();
+      }
+      overlayOut = overlayIn;
+      outW = inW;
+      overlayIn = desired;
+      inW = 0;
+      if (desired) {
+        desired.reset();
+        if (desired === attack) desired.time = attackStart; // strike slice
+        desired.play();
+      }
+    }
+    const fadeStep = dt / OVERLAY_XFADE;
+    if (overlayIn) {
+      inW = Math.min(1, inW + fadeStep);
+      overlayIn.setEffectiveWeight(inW);
+    }
+    if (overlayOut) {
+      outW -= fadeStep;
+      if (outW <= 0) {
+        outW = 0;
+        overlayOut.setEffectiveWeight(0);
+        overlayOut.stop();
+        overlayOut = null;
+      } else {
+        overlayOut.setEffectiveWeight(outW);
+      }
+    }
+
+    // Locomotion layer takes the weight the overlays leave behind.
+    const base = Math.max(0, 1 - inW - outW);
+    locoAction.setEffectiveWeight(base * locoRatio);
+    idle.setEffectiveWeight(base * (1 - locoRatio));
 
     mixer.update(dt);
   }

@@ -9,6 +9,10 @@ import { CatProjectiles, hasLineOfSight } from './CatProjectiles';
 const SEPARATION_DIST = 0.9;
 const DESPAWN_AFTER = 2.0; // s after death
 const WAVE_BREATHER = 1.5; // s between waves
+/** Seconds of claw-swipe animation per melee attack. Contract with
+ *  CatVisual: it compresses the attack clip into this window so the strike
+ *  reads right as the damage lands. */
+const MELEE_ANIM_TIME = 0.6;
 const OBSTACLE_MIN_TOP_Y = 0.5; // colliders shorter than this never push cats
 const OBSTACLE_RADIUS = 0.35; // base cat push-out radius (scaled per cat)
 const ARENA_CLAMP = 12.3;
@@ -34,6 +38,10 @@ export class CatSystem {
   private nextId = 1;
   private waveTimer = 0; // counts down the breather between waves
   private started = false;
+  /** Guards the one-shot wave:cleared emit. Starts true (an empty pre-game
+   *  field is not a cleared wave); spawnWave() arms it, the clear emit and
+   *  restart() disarm it — so restart/death cleanup never fire the event. */
+  private waveCleared = true;
 
   constructor(private readonly scene: Scene) {
     this.projectiles = new CatProjectiles(scene);
@@ -71,10 +79,17 @@ export class CatSystem {
     if (this.started && !state.health.dead) {
       const anyAlive = state.cats.some((c) => c.phase === 'alive');
       if (!anyAlive) {
+        if (!this.waveCleared) {
+          // The field just went clear — fires once per wave, before the
+          // breather countdown starts.
+          this.waveCleared = true;
+          bus.emit('wave:cleared', { wave: state.score.wave });
+        }
         this.waveTimer -= dt;
         if (this.waveTimer <= 0) {
           state.score.wave++;
           const count = this.spawnWave(state, px, pz);
+          this.waveCleared = false;
           this.waveTimer = WAVE_BREATHER;
           bus.emit('wave:started', { wave: state.score.wave, count });
         }
@@ -89,6 +104,9 @@ export class CatSystem {
         cat.deadFor += dt;
         continue;
       }
+      // Swipe-anim clock ticks even through flinch/freeze so the visual
+      // never stalls mid-swing.
+      if (cat.meleeAnim > 0) cat.meleeAnim = Math.max(0, cat.meleeAnim - dt);
       if (cat.flinch > 0) {
         cat.flinch -= dt;
         continue; // staggered — no move, no attack
@@ -106,6 +124,8 @@ export class CatSystem {
       if (dist <= spec.meleeRange) {
         if (cat.attackCooldown <= 0 && !state.health.dead) {
           cat.attackCooldown = spec.meleeCooldown;
+          cat.meleeAnim = MELEE_ANIM_TIME;
+          bus.emit('enemy:melee', { id: cat.id });
           bus.emit('player:damaged', { amount: spec.meleeDamage, fromX: cat.x, fromZ: cat.z });
         }
       } else if (!spec.ranged || dist > spec.ranged.fireRange) {
@@ -227,8 +247,8 @@ export class CatSystem {
   }
 
   /** Per rendered frame: hand each cat's state to its visual, which owns
-   *  all posing (walk cycle, flinch jerk, windup eye-flare, death keel-over
-   *  + sink + eye-glow fade). */
+   *  all posing (walk/run cycle, hit-react, melee swipe, windup eye-flare,
+   *  death anim/keel-over + sink + eye-glow fade). */
   frameUpdate(state: GameState, nowS: number): void {
     for (const cat of state.cats) {
       const vis = this.visuals.get(cat.id);
@@ -324,6 +344,8 @@ export class CatSystem {
         strafeDir: Math.random() < 0.5 ? -1 : 1,
         strafeTimer: 1.2 + Math.random() * 1.0,
         deadFor: 0,
+        meleeAnim: 0,
+        deathStyle: 0,
       };
       state.cats.push(cat);
       state.enemySpawnQueue.push({ id, x: cat.x, z: cat.z, scale: cat.scale });
@@ -331,6 +353,7 @@ export class CatSystem {
       vis.group.position.set(cat.x, 0, cat.z);
       this.scene.add(vis.group);
       this.visuals.set(id, vis);
+      bus.emit('enemy:spawned', { id, archetype: archetypeId });
     }
     return composition.length;
   }
@@ -338,6 +361,7 @@ export class CatSystem {
   private kill(state: GameState, cat: CatData, headshot: boolean): void {
     cat.phase = 'dying';
     cat.deadFor = 0;
+    cat.deathStyle = headshot ? 1 : 0; // headshot slams forward, body falls back
     state.score.kills++;
     state.enemyRemoveQueue.push(cat.id); // hitbox gone immediately
     const spec = ARCHETYPES[cat.archetype];
@@ -375,5 +399,6 @@ export class CatSystem {
     state.score.shots = 0;
     state.score.hits = 0;
     this.waveTimer = 0;
+    this.waveCleared = true; // restart cleanup must not read as a cleared wave
   }
 }

@@ -213,6 +213,12 @@ export interface CatData {
   strafeTimer: number;
   /** Wall-clock seconds since death (drives fall-over + despawn). */
   deadFor: number;
+  /** Seconds of melee-swipe animation remaining (set by CatSystem when a
+   *  claw attack lands; CatVisual plays the swipe clip while > 0). */
+  meleeAnim: number;
+  /** Death animation variant: 0 = fall backward, 1 = slam forward
+   *  (headshots slam forward). Set once in kill(). */
+  deathStyle: 0 | 1;
 }
 
 export interface EnemyColliderRef {

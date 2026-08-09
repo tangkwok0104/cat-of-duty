@@ -156,14 +156,28 @@ export class Hud {
     make('wave-toast', 'wave-toast', this.root);
     make('damage-vignette', 'damage-vignette', this.root);
 
-    // Sniper scope overlay: circular mask + reticle, shown when scoped.
+    // Sniper scope overlay: circular mask + star reticle, shown when scoped.
+    // Crosshair arms + mil-dot ticks stay inside the glass radius (r=31,
+    // matches .scope-mask's fade) so nothing pokes onto the black vignette.
+    // Every stroke is drawn twice — a wider --c-bg backer under a thinner
+    // --c-text line on top — so the reticle reads on bright sky.
     const scope = make('scope-overlay', 'scope-overlay scope-hidden', this.root);
+    const reticleArms =
+      'M50 21 V45.5 M50 54.5 V79 M21 50 H45.5 M54.5 50 H79 ' +
+      'M48.6 41H51.4 M48.6 34H51.4 M48.6 27H51.4 ' +
+      'M48.6 59H51.4 M48.6 66H51.4 M48.6 73H51.4 ' +
+      'M41 48.6V51.4 M34 48.6V51.4 M27 48.6V51.4 ' +
+      'M59 48.6V51.4 M66 48.6V51.4 M73 48.6V51.4';
+    const starPoints =
+      '51,50 52.263,52.263 50,51 47.737,52.263 49,50 47.737,47.737 50,49 52.263,47.737';
     scope.innerHTML =
       '<div class="scope-mask"></div>' +
       '<svg class="scope-reticle" viewBox="0 0 100 100" aria-hidden="true">' +
-      '<circle cx="50" cy="50" r="31" fill="none" stroke="currentColor" stroke-width="0.5"/>' +
-      '<path d="M50 4 V44 M50 56 V96 M4 50 H44 M56 50 H96" stroke="currentColor" stroke-width="0.35"/>' +
-      '<path d="M50 40 V60 M40 50 H60" stroke="currentColor" stroke-width="0.8"/>' +
+      '<circle class="scope-rim scope-outline" cx="50" cy="50" r="31" fill="none" stroke-width="0.7"/>' +
+      `<path class="scope-outline" d="${reticleArms}" stroke-width="0.62" stroke-linecap="butt"/>` +
+      '<circle class="scope-rim scope-ink" cx="50" cy="50" r="31" fill="none" stroke-width="0.35"/>' +
+      `<path class="scope-ink" d="${reticleArms}" stroke-width="0.3" stroke-linecap="butt"/>` +
+      `<polygon class="scope-star" points="${starPoints}"/>` +
       '</svg>';
 
     // Death screen with end-of-run stats.
