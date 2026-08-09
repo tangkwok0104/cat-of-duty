@@ -16,6 +16,61 @@
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
+## SHIPPED (2026-08-10) — https://cat-of-duty.vercel.app
+
+Deployed to Vercel production (project `cat-of-duty`, account tangkwok0104).
+`main` branch created at the shipped tip. Verified live: 200 + rendered menu
+screenshot. Stats overlay now hidden on non-local hosts (F3 toggles); menu
+hint fixed to "1-4 GUNS".
+
+## Combat Wave 5 (2026-08-10 overnight) — the playtest-feedback wave
+
+All of Anson's playtest complaints, built by a 5-builder workflow on
+disjoint files, verified by gates + adversarial visual QA (screenshots in
+`screenshots/wave5-feedback/`):
+
+- **"Never know what floor objects are"** → every pickup type has a floating
+  canvas-sprite label + icon (HEALTH cross / AMMO bullets / gun names from
+  config / AMMO STATION crate), new `gameplay/PickupLabel.ts`; per-kind spin
+  speeds differentiate health (1.0) vs ammo (1.8 rad/s). Labels never
+  bloomed, never parented to spinning meshes.
+- **"No enlarge when shooting far"** → CatOverlays distance compensation:
+  scale × max(1, dist/9m), numbers capped 3.2×, bars 2.2× — QA measured
+  ~12px at 18.5m vs ~8-9px pure perspective; readable at range, unchanged
+  inside 9m.
+- **"Cats floating, not running"** → root cause was CatVisual.ts:492 driving
+  leg cadence from the spawn-time cruise-speed constant while real
+  displacement diverged (separation pushes, gunner strafe, obstacle snaps).
+  Now: EMA-smoothed real displacement speed (0.18s) / (locoMps × cat.scale)
+  with clamp; visual-only body yaw blends toward actual movement heading
+  (8 rad/s) when >0.8 m/s, back to face-player when slow/windup/overlay.
+  Heavy's 1.35× stride mismatch fixed by the scale factor.
+- **"Low ammo notification"** → mag-fraction HUD states: amber ≤35%, pulsing
+  red ≤15%/empty, RELOAD [R] / FIND AMMO prompts (reads mag size from
+  WeaponConfig, no duplicated numbers).
+- **"Auto-reload"** → empty-mag trigger pull auto-reloads when reserve > 0
+  (same requestReload path; manual R untouched — harness exact-ammo asserts
+  intact). QA asserted reloading flips true from state without R.
+- **"Never end shooting and rest"** → WAVE_BREATHER 1.5s → 7s; `wave:cleared`
+  now carries `breatherS`; persistent HUD banner counts down "WAVE N CLEARED
+  — NEXT WAVE IN s" (deadline-derived in frame(), no timers). QA saw 6→2
+  counting between +1s and +5s shots, recurring every wave.
+- **"Arena small"** → 26×26 → 38×38 (ROOM_HALF 19): interior layout kept as
+  mid-field, ~7 new cover pieces in the outer ring, spawn ring scaled to
+  ±17-17.5, ARENA_CLAMP 18.3, minimap rescaled (single derived constant),
+  harness LoS search bounds ±12 → ±18 in lockstep.
+
+Gates: tsc 0 ×2 configs, build green, loop 14/14 ×2 with 0 console errors,
+perf mid-combat wave 5: 120 fps, 8.70 ms p95, 145 draws, 361k tris — no
+regression despite the bigger arena. Visual QA: 7/7 PASS.
+
+Known follow-ups: (1) wave-1's instant spawn beats the GLB load → first cat
+is the untextured proxy (fix funded in wave 6 loading work — "first cat must
+be the real cat"); (2) outer-ring corners still sparse (level-art debt);
+(3) builder-caught RTK gotcha reconfirmed — bare `npx tsc` returned a fake
+clean summary, `rtk proxy` surfaced the real error (verification through RTK
+is not verification).
+
 ## Combat Wave 4C — damage feedback, weapon audio, paw viewmodel, diet cat (2026-08-09)
 
 (Session crashed mid-verification; all gates re-run clean on resume.)

@@ -8,6 +8,7 @@ import { FIXED_DT } from '../core/Time';
 import type { GameState } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import { WEAPONS } from '../weapons/WeaponConfig';
+import { buildPickupLabel, drawAmmoIcon, drawHealthIcon, type PickupLabelHandle } from './PickupLabel';
 
 const CAP = 16;
 const DROP_CHANCE = 0.3;
@@ -28,12 +29,20 @@ const MAGNET_SPEED = 6; // m/s glide once a useful pickup is in magnet range
 
 const REST_Y = 0.45;
 const RADIUS = 0.16;
-const SPIN_SPEED = 1.4; // rad/s, slow spin
+/** Per-kind spin speed (playtest ask: pickups were unreadable on the floor —
+ *  distinct motion is part of telling health/ammo apart at a glance, on top
+ *  of the floating label). */
+const HEALTH_SPIN_SPEED = 1.0; // rad/s
+const AMMO_SPIN_SPEED = 1.8; // rad/s
 const BOB_AMP = 0.06;
 const BOB_FREQ = 2.2;
 
 const HEALTH_COLOR = 0x8fd94c; // warm green
 const AMMO_COLOR = 0xffab30; // amber
+
+const HEALTH_LABEL_COLOR = '#9ee493'; // HUD --c-ok
+const AMMO_LABEL_COLOR = '#ffb02e'; // HUD --c-accent
+const LABEL_Y_OFFSET = 0.32; // above the octahedron's REST_Y/bob center
 
 const KIND_HEALTH = 0;
 const KIND_AMMO = 1;
@@ -66,6 +75,10 @@ export class Pickups {
   private readonly age = new Float32Array(CAP);
   private readonly meshes: Mesh[] = [];
   private readonly mats: MeshStandardMaterial[] = [];
+  /** Floating name+icon labels, one per pool slot, added straight to the
+   *  scene — NOT parented to `meshes[i]`, since the octahedron spins at
+   *  1–1.8 rad/s and would drag the text around with it. */
+  private readonly labels: PickupLabelHandle[] = [];
   private stateRef: GameState | null = null;
 
   constructor(scene: Scene) {
@@ -78,6 +91,10 @@ export class Pickups {
       scene.add(mesh);
       this.meshes.push(mesh);
       this.mats.push(mat);
+
+      const label = buildPickupLabel(['HEALTH'], HEALTH_LABEL_COLOR, drawHealthIcon);
+      scene.add(label.sprite);
+      this.labels.push(label);
     }
     bus.on('enemy:killed', ({ x, z }) => this.tryDrop(x, z));
     bus.on('game:restart', () => this.clear());
@@ -125,8 +142,9 @@ export class Pickups {
     }
   }
 
-  /** Per rendered frame: spin, float bob, and the near-despawn emissive
-   *  blink. Position/rotation only — collection state never changes here. */
+  /** Per rendered frame: spin, float bob, label position, and the
+   *  near-despawn emissive blink. Position/rotation only — collection state
+   *  never changes here. */
   frameUpdate(nowS: number): void {
     for (let i = 0; i < CAP; i++) {
       if (!this.alive[i]) continue;
@@ -134,10 +152,15 @@ export class Pickups {
       const mat = this.mats[i];
       if (!mesh || !mat) continue;
 
+      const k = this.kind[i] ?? KIND_HEALTH;
       const x = this.x[i] ?? 0;
       const z = this.z[i] ?? 0;
-      mesh.position.set(x, REST_Y + Math.sin(nowS * BOB_FREQ + i) * BOB_AMP, z);
-      mesh.rotation.y = nowS * SPIN_SPEED + i;
+      const meshY = REST_Y + Math.sin(nowS * BOB_FREQ + i) * BOB_AMP;
+      mesh.position.set(x, meshY, z);
+      mesh.rotation.y = nowS * (k === KIND_HEALTH ? HEALTH_SPIN_SPEED : AMMO_SPIN_SPEED) + i;
+
+      const label = this.labels[i];
+      if (label) label.sprite.position.set(x, meshY + LABEL_Y_OFFSET, z);
 
       const age = this.age[i] ?? 0;
       mat.emissiveIntensity =
@@ -204,6 +227,21 @@ export class Pickups {
       mesh.visible = true;
       mesh.position.set(x, REST_Y, z);
     }
+
+    // Redraw unconditionally — on pool-eviction reuse this slot's label may
+    // still show the previous occupant's kind, and a stale label is exactly
+    // the "what is that on the floor" bug this system exists to fix.
+    const label = this.labels[slot];
+    if (label) {
+      const isHealth = k === KIND_HEALTH;
+      label.draw(
+        [isHealth ? 'HEALTH' : 'AMMO'],
+        isHealth ? HEALTH_LABEL_COLOR : AMMO_LABEL_COLOR,
+        isHealth ? drawHealthIcon : drawAmmoIcon,
+      );
+      label.sprite.visible = true;
+      label.sprite.position.set(x, REST_Y + LABEL_Y_OFFSET, z);
+    }
   }
 
   private collect(state: GameState, i: number, k: number): void {
@@ -222,6 +260,8 @@ export class Pickups {
     this.alive[i] = 0;
     const mesh = this.meshes[i];
     if (mesh) mesh.visible = false;
+    const label = this.labels[i];
+    if (label) label.sprite.visible = false;
   }
 
   private clear(): void {

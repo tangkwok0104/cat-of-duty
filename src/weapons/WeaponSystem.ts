@@ -186,6 +186,13 @@ export class WeaponSystem {
       if (slot.ammo > 0) {
         this.fire(state, cfg, nowS);
         this.cooldown = 60 / cfg.rpm;
+      } else if (slot.reserve > 0) {
+        // Empty mag, ammo in reserve: auto-reload instead of a dry click.
+        // requestReload is self-guarded and sets w.reloading synchronously,
+        // so this branch can't re-enter next frame either way — the
+        // cooldown just debounces the trigger while the reload spins up.
+        this.requestReload(nowS);
+        this.cooldown = 0.25;
       } else {
         bus.emit('weapon:dry', {});
         this.cooldown = 0.25;

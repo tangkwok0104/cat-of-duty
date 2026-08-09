@@ -25,7 +25,7 @@ export interface LevelTextures {
   crate: PbrMaps;
 }
 
-const ROOM_HALF = 13; // 26 m × 26 m arena
+const ROOM_HALF = 19; // 38 m × 38 m arena (was 26 m × 26 m — playtest: too small)
 const WALL_H = 3.6;
 const WALL_T = 0.3;
 const CRATE_HALF = 0.45;
@@ -127,6 +127,33 @@ export function buildGreyBoxRoom(
   pillars.receiveShadow = true;
   scene.add(pillars);
 
+  // ---- Outer-ring pillar blocks (arena expansion 26m→38m) ----
+  // Same geometry/material as the corner pillars above, reused via a
+  // SEPARATE InstancedMesh rather than appending to `pillarPos` — that
+  // array (and its length) is shared with the amber strip-lighting loop
+  // below, which is hard-sized to 4 instances; extending it would silently
+  // overrun the strips InstancedMesh's fixed instance count. These fill the
+  // new moat between the old 13 m walls and the new 19 m walls, laterally
+  // (east/west) where the diagonal cover walls below don't reach. Checked
+  // clear of every spawn point (SPAWN_POINTS, CatSystem.ts) and every
+  // frozen weapon/station/player-spawn coordinate by >=7 m.
+  const outerPillarPos: [number, number][] = [
+    [14.5, 2.5],
+    [-14.7, -2.2],
+  ];
+  const outerPillars = new InstancedMesh(pillarGeo, wallMat, outerPillarPos.length);
+  outerPillarPos.forEach(([x, z], i) => {
+    _q.identity();
+    _m.compose(_p.set(x, WALL_H / 2, z), _q, _s);
+    outerPillars.setMatrixAt(i, _m);
+    state.level.staticColliders.push({
+      x, y: WALL_H / 2, z, hx: 0.35, hy: WALL_H / 2, hz: 0.35, rotY: 0,
+    });
+  });
+  outerPillars.castShadow = true;
+  outerPillars.receiveShadow = true;
+  scene.add(outerPillars);
+
   // ---- Static crate clusters (instanced) ----
   const crateMat = pbrMaterial(tex.crate);
   crateMat.normalScale.set(1.35, 1.35); // planks must visibly groove in sun
@@ -150,6 +177,17 @@ export function buildGreyBoxRoom(
     { x: 5.9, y: CRATE_HALF, z: -5.2, rotY: -0.6 },
     { x: 6.6, y: CRATE_HALF, z: -4.6, rotY: 0.2 },
     { x: -6.4, y: CRATE_HALF, z: -5.5, rotY: 1.1 },
+    // outer-ring cluster N (arena expansion): breaks sightline for cats
+    // stepping off the north spawn points (0,-17.5)/(±17,-17), >=4 m clear
+    // of all three.
+    { x: 2.5, y: CRATE_HALF, z: -14.3, rotY: 0.2 },
+    { x: 3.5, y: CRATE_HALF, z: -14.15, rotY: -0.25 },
+    { x: 3.0, y: CRATE_HALF * 3 + STACK_LIFT, z: -14.25, rotY: 0.4 },
+    // outer-ring cluster S: mirrors cluster N for the south spawn points
+    // (0,17.5)/(±17,17).
+    { x: -2.5, y: CRATE_HALF, z: 14.3, rotY: -0.2 },
+    { x: -3.5, y: CRATE_HALF, z: 14.15, rotY: 0.25 },
+    { x: -3.0, y: CRATE_HALF * 3 + STACK_LIFT, z: 14.25, rotY: -0.4 },
   ];
   const staticCrates = new InstancedMesh(crateGeo, crateMat, staticDefs.length);
   staticDefs.forEach((d, i) => {
@@ -201,7 +239,7 @@ export function buildGreyBoxRoom(
   const PLATFORM_CZ = -8.3;
   const PLATFORM_TOP = 1.2;
   // 3 m × 3 m top. Centred to stay clear of the (6,-6) pillar + its crate
-  // scatter (gap ≥0.45 m) and ≥1.2 m inside the 11-11.5 spawn ring on both
+  // scatter (gap ≥0.45 m) and well inside the 17-17.5 spawn ring on both
   // axes (checked against the platform's own extents, the widest new shape).
   const PLATFORM_HALF = 1.5;
   const platform = new Mesh(
@@ -268,8 +306,19 @@ export function buildGreyBoxRoom(
   const COVER_H = 1.1;
   const COVER_T = 0.3;
   const coverDefs: { x: number; z: number; rotY: number }[] = [
+    // Original mid-field pair (unchanged) — see comment above.
     { x: -4.5, z: 4.0, rotY: 0.5 },
     { x: 4.0, z: -2.0, rotY: -0.35 },
+    // Outer-ring set (arena expansion 26m→38m): fills the moat between the
+    // old 13 m walls and the new 19 m walls, one per quadrant, so it isn't
+    // a barren gap and cats stepping off the spawn ring get somewhere to
+    // break sightline immediately. Each keeps >=7 m clearance from every
+    // SPAWN_POINTS entry (CatSystem.ts) and from the frozen weapon/station/
+    // player-spawn coordinates.
+    { x: -13.8, z: -10.2, rotY: 0.45 },
+    { x: 13.6, z: -9.6, rotY: -0.4 },
+    { x: -13.2, z: 10.8, rotY: 0.3 },
+    { x: 13.4, z: 10.3, rotY: -0.35 },
   ];
   const coverGeo = new BoxGeometry(COVER_LEN, COVER_H, COVER_T);
   const coverWalls = new InstancedMesh(coverGeo, wallMat, coverDefs.length);

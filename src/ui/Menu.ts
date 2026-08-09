@@ -71,7 +71,7 @@ export class Menu {
               <span id="set-vol-v" class="menu-val"></span>
             </label>
           </div>
-          <div class="menu-hint">WASD MOVE · SHIFT SPRINT · CTRL CROUCH · SPACE JUMP · 1/2/3 GUNS · R RELOAD</div>
+          <div class="menu-hint">WASD MOVE · SHIFT SPRINT · CTRL CROUCH · SPACE JUMP · 1-4 GUNS · R RELOAD</div>
         </div>
       </div>`;
 

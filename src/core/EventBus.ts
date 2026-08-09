@@ -32,7 +32,9 @@ export interface Events {
   /** A rusher/heavy started a claw swipe (battle meow + swipe anim). */
   'enemy:melee': { id: number };
   /** The field just went clear (victory meow; next wave after the breather). */
-  'wave:cleared': { wave: number };
+  /** Field is clear. `breatherS` = length of the intermission that starts
+   *  now (HUD derives its countdown from this one event — no per-tick spam). */
+  'wave:cleared': { wave: number; breatherS: number };
   /** A ranged cat started its telegraph (audio cue — the fair-warning chirp). */
   'enemy:windup': { id: number; x: number; z: number };
   /** A ranged cat fired a projectile (muzzle sound, minimap ping). */

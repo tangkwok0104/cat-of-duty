@@ -99,6 +99,23 @@ const ATTACK_CLIP_WINDOW = 0.8; // clip-seconds shown across the swipe
  *  slice is the head-snap, not a slow lean-in. */
 const HIT_REACT_TIMESCALE = 1.6;
 const MAX_FRAME_DT = 0.1; // clamp big gaps (tab-out, hitches)
+/** EMA time constant smoothing raw per-tick displacement speed before it
+ *  drives gait cadence. Without this, separation pushes (up to +2.2 m/s),
+ *  gunner approach+strafe stacking (~1.41x), and instant obstacle push-outs
+ *  all spike the per-tick speed every frame — feeding that straight into
+ *  timeScale was the "ice-skating" bug (cadence jittering independent of
+ *  the actual stride). Real legs don't change pace in one physics tick. */
+const SPEED_SMOOTH_TIME = 0.18;
+/** Sane band for the smoothed feet-pace timeScale so a rare smoothing
+ *  spike (e.g. a big push-out) can't visibly freeze or overdrive the gait. */
+const LOCO_TIMESCALE_MIN = 0.4;
+const LOCO_TIMESCALE_MAX = 2.2;
+/** Above this smoothed ground speed the visual body turns to face its
+ *  actual movement heading instead of cat.yaw (which CatSystem locks to
+ *  the player every tick) — fixes a strafing gunner playing the
+ *  forward-stride walk clip while gliding sideways. */
+const FACING_BLEND_SPEED_MIN = 0.8;
+const FACING_TURN_RATE = 8; // rad/s turn-rate limit, shortest-arc
 
 /** Archetype fur tints multiplied into the master texture. Rusher keeps the
  *  natural grey tabby; gunner reads warm brown, heavy dark slate (heavy's
@@ -316,6 +333,17 @@ function primeAction(action: AnimationAction): AnimationAction {
   return action;
 }
 
+/** Shortest-arc angle delta from `current` to `target`, wrapped to
+ *  (-PI, PI] — turn-rate limiting must always turn the SHORT way around,
+ *  never take the long way through a 2PI wrap. */
+function shortestArcDelta(current: number, target: number): number {
+  const twoPi = Math.PI * 2;
+  let diff = (target - current) % twoPi;
+  if (diff > Math.PI) diff -= twoPi;
+  else if (diff < -Math.PI) diff += twoPi;
+  return diff;
+}
+
 function primeOneShot(action: AnimationAction): AnimationAction {
   action.setLoop(LoopOnce, 1);
   action.clampWhenFinished = true; // hold the final pose during fade/despawn
@@ -418,6 +446,8 @@ function buildSoldierVisual(
   let prevZ = Number.NaN;
   let prevFlinch = 0;
   let prevMelee = 0;
+  let smoothedSpeed = Number.NaN; // EMA of real per-tick displacement speed (m/s)
+  let visualYaw = Number.NaN; // turn-rate-limited visual facing (see movement-facing block)
   let locoAction = walk;
   let locoMps = WALK_METERS_PER_SEC;
   // One-shot overlay layer: `overlayIn` rises toward weight 1, `overlayOut`
@@ -469,16 +499,34 @@ function buildSoldierVisual(
         run.time = runTimeOffset;
       }
 
+      // Real per-tick displacement (m/s) and heading — what the body is
+      // ACTUALLY covering/facing this frame, vs. cat.speed which is a
+      // cruise-speed constant rolled once at spawn. Separation pushes,
+      // gunner approach+strafe stacking, and instant obstacle push-outs all
+      // make the two diverge tick to tick. No previous position yet (first
+      // frame) → fall back to cat.speed and skip the heading (no delta to
+      // measure it from).
+      const haveDisplacement = dt > 0 && !Number.isNaN(prevX);
+      let dx = 0;
+      let dz = 0;
+      let realSpeed = cat.speed;
+      if (haveDisplacement) {
+        dx = cat.x - prevX;
+        dz = cat.z - prevZ;
+        realSpeed = Math.sqrt(dx * dx + dz * dz) / dt;
+      }
       // Walk/run vs idle from actual displacement: a gunner holding
       // preferred range stands (idle), anything covering ground strides.
-      let moving = true;
-      if (dt > 0 && !Number.isNaN(prevX)) {
-        const dx = cat.x - prevX;
-        const dz = cat.z - prevZ;
-        moving = Math.sqrt(dx * dx + dz * dz) / dt > IDLE_SPEED_EPS;
-      }
+      const moving = realSpeed > IDLE_SPEED_EPS;
       prevX = cat.x;
       prevZ = cat.z;
+
+      // EMA-smooth the raw per-tick speed before it drives gait cadence —
+      // feeding the raw value straight into timeScale was the ice-skating
+      // bug (see SPEED_SMOOTH_TIME above).
+      smoothedSpeed = Number.isNaN(smoothedSpeed)
+        ? realSpeed
+        : smoothedSpeed + (realSpeed - smoothedSpeed) * (1 - Math.exp(-dt / SPEED_SMOOTH_TIME));
 
       const target = moving ? 1 : 0;
       if (locoRatio !== target) {
@@ -488,8 +536,37 @@ function buildSoldierVisual(
             ? Math.min(target, locoRatio + step)
             : Math.max(target, locoRatio - step);
       }
-      // Feet pace matches ground speed (cat.speed varies per cat).
-      locoAction.setEffectiveTimeScale(cat.speed / locoMps);
+      // Feet pace matches the SMOOTHED actual ground speed, scaled down by
+      // the cat's archetype size — a 1.35x-scale heavy's legs cover 1.35x
+      // more ground per stride than the clip (tuned on the base rig)
+      // assumes, so its cadence must run 1.35x slower to keep feet planted.
+      // Clamped so a rare smoothing spike can't visibly freeze/overdrive it.
+      const rawTimeScale = smoothedSpeed / (locoMps * cat.scale);
+      locoAction.setEffectiveTimeScale(
+        Math.min(LOCO_TIMESCALE_MAX, Math.max(LOCO_TIMESCALE_MIN, rawTimeScale)),
+      );
+
+      // Movement-facing: turn the visual body toward its actual movement
+      // heading instead of always facing cat.yaw, which CatSystem locks to
+      // the player every tick (aiming) — a strafing gunner's real
+      // displacement is sideways, so facing cat.yaw while playing the
+      // forward-stride walk clip read as a sideways glide. Suppressed
+      // during cat.windup > 0 (the only telegraph flag CatData exposes) so
+      // the eye-flare aim tell still reads as aiming, and while an overlay
+      // (death/melee/hit) owns most of the blend weight (inW/outW from the
+      // PREVIOUS frame's bookkeeping below — one frame of lag, imperceptible
+      // against an 8 rad/s turn) so those clips keep facing the player.
+      if (Number.isNaN(visualYaw)) visualYaw = cat.yaw;
+      if (cat.windup <= 0 && inW + outW <= 0.5) {
+        const movementYaw = haveDisplacement ? Math.atan2(dx, dz) : cat.yaw;
+        const facingTarget = smoothedSpeed > FACING_BLEND_SPEED_MIN ? movementYaw : cat.yaw;
+        const maxStep = FACING_TURN_RATE * dt;
+        const delta = shortestArcDelta(visualYaw, facingTarget);
+        visualYaw += Math.max(-maxStep, Math.min(maxStep, delta));
+      } else {
+        visualYaw = cat.yaw; // overlay/windup owns facing — snap, as before
+      }
+      group.rotation.y = visualYaw;
 
       // Windup telegraph: eyes flare toward the shot — the fairness window.
       if (cat.windup > 0) {

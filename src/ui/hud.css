@@ -120,12 +120,32 @@
   color: var(--c-text);
 }
 
-.ammo-mag.ammo-low {
+.ammo-mag.ammo-warn {
+  color: var(--c-accent);
+}
+
+/* Below the warn threshold (or empty): danger red + a steady pulse so an
+   empty mag reads even when the player isn't looking straight at the HUD. */
+.ammo-mag.ammo-critical {
   color: var(--c-danger);
+  animation: ammo-critical-pulse 500ms ease-in-out infinite alternate;
+}
+
+@keyframes ammo-critical-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
 }
 
 .ammo-mag.ammo-tick {
   animation: ammo-pop 140ms var(--ease-snap);
+}
+
+/* Both states can land on the same shot (critical + the pop from that shot
+   ticking the count down) — a bare `animation` property can't hold two
+   independent timelines from two separate class rules, so give the
+   combination its own rule that runs both at once. */
+.ammo-mag.ammo-critical.ammo-tick {
+  animation: ammo-critical-pulse 500ms ease-in-out infinite alternate, ammo-pop 140ms var(--ease-snap);
 }
 
 @keyframes ammo-pop {
@@ -157,6 +177,31 @@
 @keyframes reload-blink {
   from { opacity: 1; }
   to { opacity: 0.35; }
+}
+
+/* Sits in the same spot as .hud-reload — mutually exclusive in time (see
+   Hud.ts), so sharing the box is safe. RELOAD is amber (you have reserve,
+   just press R); FIND AMMO is danger red (reserve is gone too). */
+.hud-reload-prompt {
+  position: absolute;
+  right: var(--s4);
+  bottom: calc(var(--s4) + var(--s4));
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: var(--c-accent);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.hud-reload-prompt.prompt-on {
+  opacity: 1;
+  animation: reload-blink 500ms ease-in-out infinite alternate;
+}
+
+.hud-reload-prompt.prompt-urgent {
+  color: var(--c-danger);
 }
 
 /* ---- Weapon row ---- */
@@ -291,6 +336,44 @@
 
 .acquire-toast.toast-play {
   animation: toast 1.6s var(--ease-out);
+}
+
+/* ---- Intermission banner ----
+   Persistent for the whole breather (unlike .wave-toast, which fires once
+   and fades) — panel-token styling like .minimap so it reads as a fixed
+   HUD fixture, not a transient callout. */
+.intermission-banner {
+  position: absolute;
+  left: 50%;
+  top: var(--s4);
+  transform: translateX(-50%);
+  padding: var(--s2) var(--s4);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--c-text);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.intermission-banner.ib-visible {
+  opacity: 1;
+}
+
+.intermission-banner.ib-play {
+  animation: ib-in 400ms var(--ease-out);
+}
+
+@keyframes ib-in {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* ---- Minimap ---- */

@@ -10,6 +10,7 @@ import type { GameState } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import { WEAPONS } from '../weapons/WeaponConfig';
 import { loadModel } from '../core/Assets';
+import { buildPickupLabel, drawCrateIcon } from './PickupLabel';
 
 /** Fixed arsenal pickups + ammo stations (pattern-matches gameplay/Pickups:
  *  fixed-step collection, per-frame spin/bob, emissive rings registered with
@@ -39,6 +40,11 @@ const BREATHE_FREQ = 2.0;
 
 const WEAPON_RING_COLOR = 0x7fc8ff; // cool "new gear" glow — distinct from
 const AMMO_RING_COLOR = 0xffab30; //   the amber ammo language (Pickups)
+
+const GUN_LABEL_COLOR = '#e9e6d7'; // HUD --c-text (bone/cream)
+const STATION_LABEL_COLOR = '#ffb02e'; // matches the amber ammo language
+const GUN_LABEL_Y = 0.55; // local to holder — on the Y axis, so holder.rotation.y can't move it
+const STATION_LABEL_Y = 0.6; // local to stationHolder, which never rotates
 
 const STATION_RESPAWN_S = 45;
 const STATION_BLINK_S = 0.7; // blink-back-in flash duration
@@ -109,6 +115,15 @@ export class WeaponPickups {
       // alone marks the spot until the model resolves (never gates boot).
       const cfg = WEAPONS[spot.slot];
       if (cfg) {
+        // Name label, parented to the holder: (0, y, 0) sits ON the Y axis
+        // the holder spins around, so holder.rotation.y never displaces it.
+        // holder.visible already gates the whole subtree (hideWeapon/reset),
+        // so the label needs no separate show/hide wiring of its own.
+        const label = buildPickupLabel([cfg.name], GUN_LABEL_COLOR);
+        label.sprite.visible = true;
+        label.sprite.position.set(0, GUN_LABEL_Y, 0);
+        holder.add(label.sprite);
+
         loadModel(cfg.viewModel.file)
           .then((gltf) => {
             const inst = gltf.scene.clone(true);
@@ -159,6 +174,16 @@ export class WeaponPickups {
         .catch((err: unknown) => {
           console.error('[WeaponPickups] failed to load crate.glb', err);
         });
+
+      // Label, parented to stationHolder like the gun labels above.
+      // stationHolder never rotates, so no axis constraint applies; it DOES
+      // get scaled during the blink-in pop (respawnStation), which pops the
+      // label in together with the crate — the desired "reappears with the
+      // crate" behavior falls out of the parenting for free.
+      const stationLabel = buildPickupLabel(['AMMO STATION'], STATION_LABEL_COLOR, drawCrateIcon);
+      stationLabel.sprite.visible = true;
+      stationLabel.sprite.position.set(0, STATION_LABEL_Y, 0);
+      holder.add(stationLabel.sprite);
     }
 
     bus.on('game:restart', () => this.reset());

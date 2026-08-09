@@ -8,20 +8,22 @@ import { CatProjectiles, hasLineOfSight } from './CatProjectiles';
 
 const SEPARATION_DIST = 0.9;
 const DESPAWN_AFTER = 2.0; // s after death
-const WAVE_BREATHER = 1.5; // s between waves
+// Playtest asked for a real breather (1.5s read as barely a pause). Spawns
+// are already gated behind waveTimer, so nothing spawns mid-intermission.
+const WAVE_BREATHER = 7.0; // s between waves
 /** Seconds of claw-swipe animation per melee attack. Contract with
  *  CatVisual: it compresses the attack clip into this window so the strike
  *  reads right as the damage lands. */
 const MELEE_ANIM_TIME = 0.6;
 const OBSTACLE_MIN_TOP_Y = 0.5; // colliders shorter than this never push cats
 const OBSTACLE_RADIUS = 0.35; // base cat push-out radius (scaled per cat)
-const ARENA_CLAMP = 12.3;
+const ARENA_CLAMP = 18.3;
 
 /** Spawn ring: fixed points hugging the arena walls. */
 const SPAWN_POINTS: readonly [number, number][] = [
-  [-11, -11], [0, -11.5], [11, -11],
-  [-11.5, 0], [11.5, 0],
-  [-11, 11], [0, 11.5], [11, 11],
+  [-17, -17], [0, -17.5], [17, -17],
+  [-17.5, 0], [17.5, 0],
+  [-17, 17], [0, 17.5], [17, 17],
 ];
 
 /** Cat AI: rushers/heavies walk straight at the player and claw on contact;
@@ -83,7 +85,7 @@ export class CatSystem {
           // The field just went clear — fires once per wave, before the
           // breather countdown starts.
           this.waveCleared = true;
-          bus.emit('wave:cleared', { wave: state.score.wave });
+          bus.emit('wave:cleared', { wave: state.score.wave, breatherS: WAVE_BREATHER });
         }
         this.waveTimer -= dt;
         if (this.waveTimer <= 0) {
@@ -320,7 +322,7 @@ export class CatSystem {
     for (let i = 0; i < composition.length; i++) {
       const archetypeId = composition[i]!;
       const spec = ARCHETYPES[archetypeId];
-      const point = ranked[i % ranked.length] ?? [0, -11.5];
+      const point = ranked[i % ranked.length] ?? [0, -17.5];
       const jitter = () => (Math.random() - 0.5) * 1.6;
       const id = this.nextId++;
       const cat: CatData = {

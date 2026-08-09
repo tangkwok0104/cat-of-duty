@@ -55,6 +55,16 @@ const NUM_JITTER = 0.32; // metres, so a burst doesn't stack into one blob
 const HEADSHOT_SCALE = 1.4;
 const KILL_SCALE = 1.15; // stacks on top of the headshot scale if both apply
 
+/** Distance compensation: world-space sprites shrink with range, so a hit on
+ *  a far cat gave unreadably small feedback (playtest: far hits unreadable).
+ *  factor = max(1, dist / DIST_REF) grows the sprite's world scale linearly
+ *  past DIST_REF metres, capped per pool so it never overwhelms the frame at
+ *  extreme range. Composes multiplicatively with the existing pop/headshot/
+ *  kill multipliers — never replaces them. */
+const DIST_REF = 9; // metres — factor is 1 (no change) at/inside this range
+const NUM_DIST_CAP = 3.2;
+const BAR_DIST_CAP = 2.2;
+
 const COLOR_OK = new Color(0x9ee493); // --c-ok
 const COLOR_ACCENT = new Color(0xffb02e); // --c-accent
 const COLOR_DANGER = new Color(0xff4b3a); // --c-danger
@@ -113,6 +123,25 @@ function findCatById(cats: CatData[], id: number): CatData | undefined {
     if (c.id === id) return c;
   }
   return undefined;
+}
+
+/** Distance-compensation scale factor for a sprite at (x, y, z): 1 (no
+ *  change) inside DIST_REF, growing linearly past it and clamped to `cap`
+ *  so extreme-range hits don't blow the sprite up past legibility. */
+function distFactor(
+  viewerX: number,
+  viewerY: number,
+  viewerZ: number,
+  x: number,
+  y: number,
+  z: number,
+  cap: number,
+): number {
+  const dx = x - viewerX;
+  const dy = y - viewerY;
+  const dz = z - viewerZ;
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return Math.min(cap, Math.max(1, dist / DIST_REF));
 }
 
 interface HpBarSlot extends CanvasSprite {
@@ -180,11 +209,18 @@ export class CatOverlays {
   frameUpdate(state: GameState, nowS: number): void {
     this.stateRef = state;
     this.lastFrameNowS = nowS;
-    this.stepBars(state);
-    this.stepNumbers(nowS);
+    // Viewer = capsule center + eye offset (matches CatSystem's own LoS-eye
+    // computation) — read-only, same fields, no interpolation needed for a
+    // per-frame scale factor.
+    const p = state.player;
+    const viewerX = p.currX;
+    const viewerY = p.currY + p.eyeOffset;
+    const viewerZ = p.currZ;
+    this.stepBars(state, viewerX, viewerY, viewerZ);
+    this.stepNumbers(nowS, viewerX, viewerY, viewerZ);
   }
 
-  private stepBars(state: GameState): void {
+  private stepBars(state: GameState, viewerX: number, viewerY: number, viewerZ: number): void {
     // Release bars whose cat no longer needs one (dead, despawned, or —
     // this game has no heal, but the check costs nothing — back to full).
     for (let i = 0; i < this.bars.length; i++) {
@@ -197,7 +233,10 @@ export class CatOverlays {
         this.barFree.push(i);
         continue;
       }
-      bar.sprite.position.set(cat.x, cat.y + BAR_HEIGHT_ABOVE * cat.scale, cat.z);
+      const barY = cat.y + BAR_HEIGHT_ABOVE * cat.scale;
+      bar.sprite.position.set(cat.x, barY, cat.z);
+      const factor = distFactor(viewerX, viewerY, viewerZ, cat.x, barY, cat.z, BAR_DIST_CAP);
+      bar.sprite.scale.set(BAR_WORLD_W * factor, BAR_WORLD_H * factor, 1);
       if (cat.hp !== bar.lastDrawnHp) {
         this.drawBar(bar, cat.hp / cat.maxHp);
         bar.lastDrawnHp = cat.hp;
@@ -220,7 +259,10 @@ export class CatOverlays {
       const bar = this.bars[slotIndex]!;
       bar.catId = cat.id;
       bar.sprite.visible = true;
-      bar.sprite.position.set(cat.x, cat.y + BAR_HEIGHT_ABOVE * cat.scale, cat.z);
+      const barY = cat.y + BAR_HEIGHT_ABOVE * cat.scale;
+      bar.sprite.position.set(cat.x, barY, cat.z);
+      const factor = distFactor(viewerX, viewerY, viewerZ, cat.x, barY, cat.z, BAR_DIST_CAP);
+      bar.sprite.scale.set(BAR_WORLD_W * factor, BAR_WORLD_H * factor, 1);
       bar.lastDrawnHp = Number.NaN;
       this.drawBar(bar, cat.hp / cat.maxHp);
       bar.lastDrawnHp = cat.hp;
@@ -291,7 +333,7 @@ export class CatOverlays {
     slot.texture.needsUpdate = true;
   }
 
-  private stepNumbers(nowS: number): void {
+  private stepNumbers(nowS: number, viewerX: number, viewerY: number, viewerZ: number): void {
     for (const slot of this.numbers) {
       if (!slot.active) continue;
       const t = nowS - slot.startedAt;
@@ -302,10 +344,12 @@ export class CatOverlays {
       }
       const p = t / NUM_DURATION;
       const eased = 1 - (1 - p) * (1 - p) * (1 - p); // ease-out cubic
-      slot.sprite.position.set(slot.baseX, slot.baseY + NUM_RISE * eased, slot.baseZ);
+      const y = slot.baseY + NUM_RISE * eased;
+      slot.sprite.position.set(slot.baseX, y, slot.baseZ);
 
       const pop = t < NUM_POP_TIME ? 0.7 + 0.3 * (t / NUM_POP_TIME) : 1;
-      slot.sprite.scale.set(slot.scaleW * pop, slot.scaleH * pop, 1);
+      const factor = distFactor(viewerX, viewerY, viewerZ, slot.baseX, y, slot.baseZ, NUM_DIST_CAP);
+      slot.sprite.scale.set(slot.scaleW * pop * factor, slot.scaleH * pop * factor, 1);
 
       slot.material.opacity =
         p > NUM_FADE_START ? Math.max(0, 1 - (p - NUM_FADE_START) / (1 - NUM_FADE_START)) : 1;

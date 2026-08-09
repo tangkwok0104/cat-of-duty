@@ -55,7 +55,7 @@ async function main(): Promise<void> {
           const ang = Math.atan2(-cat.x, -cat.z) + off;
           const px = cat.x + Math.sin(ang) * d!;
           const pz = cat.z + Math.cos(ang) * d!;
-          if (Math.abs(px) > 12 || Math.abs(pz) > 12) continue;
+          if (Math.abs(px) > 18 || Math.abs(pz) > 18) continue;
           if (!window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ay!)) continue;
           const yaw = Math.atan2(-(cat.x - px), -(cat.z - pz));
           const pitch = Math.atan2(ay! - 1.62, d!);

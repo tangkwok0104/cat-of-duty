@@ -55,6 +55,17 @@ export class StatsOverlay {
       this.fields[key] = valueEl;
     }
     root.append(panel);
+    // Dev tool, not player UI: auto-show only on local hosts (keeps the
+    // Playwright perf/loop harnesses, which read this panel on 127.0.0.1,
+    // working unchanged). F3 toggles it anywhere, including production.
+    const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    panel.style.display = local ? '' : 'none';
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'F3') {
+        e.preventDefault();
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      }
+    });
     // No quality:changed listener needed — the QUAL field refreshes with
     // every 250ms stats tick anyway.
   }

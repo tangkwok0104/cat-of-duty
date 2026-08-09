@@ -4,6 +4,11 @@ import { ARCHETYPES } from '../enemies/EnemyConfig';
 import { WEAPONS } from '../weapons/WeaponConfig';
 
 const REFRESH_MS = 100;
+// Minimap world→pixel: half-extent of the play area plus a small margin so
+// wall-hugging dots don't clip the map edge. Bump this one number when the
+// arena resizes again.
+const MM_HALF_EXTENT = 19.5;
+const MM_SCALE = 148 / (MM_HALF_EXTENT * 2);
 
 /** Slice HUD: crosshair with live spread, ammo, health bar, kills/wave,
  *  hitmarker (white hit / red kill), damage vignette, death screen.
@@ -24,6 +29,10 @@ export class Hud {
   private dmgFromX = 0;
   private dmgFromZ = 0;
   private dmgTtl = 0;
+  // Intermission banner: countdown is derived from a stored deadline each
+  // throttled refresh — no setInterval, no per-tick event spam.
+  private breatherDeadline = 0;
+  private breatherWave = 0;
 
   constructor() {
     const root = document.getElementById('hud-root');
@@ -53,7 +62,11 @@ export class Hud {
     });
     bus.on('player:died', () => this.setDead(true));
     bus.on('game:restart', () => this.setDead(false));
-    bus.on('wave:started', ({ wave }) => this.waveToast(wave));
+    bus.on('wave:started', ({ wave }) => {
+      this.waveToast(wave);
+      this.hideBreather();
+    });
+    bus.on('wave:cleared', ({ wave, breatherS }) => this.showBreather(wave, breatherS));
   }
 
   private build(): void {
@@ -144,6 +157,11 @@ export class Hud {
     this.els['ammo-reserve'] = reserve;
     const reload = make('hud-reload', 'hud-reload', this.root);
     reload.textContent = 'REARMING';
+    // Sits in the same slot as #hud-reload — never shown together (REARMING
+    // only plays while w.reloading is true; this only plays while ammo===0
+    // && !reloading), so sharing the position is safe and keeps the prompt
+    // right where the player's eye already is.
+    make('hud-reload-prompt', 'hud-reload-prompt', this.root);
 
     // Top-right: kills + wave.
     const score = make('hud-score', 'hud-score', this.root);
@@ -157,6 +175,9 @@ export class Hud {
 
     make('wave-toast', 'wave-toast', this.root);
     make('acquire-toast', 'acquire-toast', this.root);
+    // Persistent breather countdown — distinct lifecycle from wave-toast
+    // (that one fires-and-fades; this one lives for the whole breather).
+    make('intermission-banner', 'intermission-banner', this.root);
     make('damage-vignette', 'damage-vignette', this.root);
 
     // Sniper scope overlay: circular mask + star reticle, shown when scoped.
@@ -276,6 +297,26 @@ export class Hud {
     t.classList.add('toast-play');
   }
 
+  /** Field just cleared: arm the countdown and play the banner in. The
+   *  number itself is refreshed from breatherDeadline in the throttled
+   *  block below — this only handles the show + reappear animation. */
+  private showBreather(wave: number, breatherS: number): void {
+    this.breatherDeadline = performance.now() + breatherS * 1000;
+    this.breatherWave = wave;
+    const el = this.els['intermission-banner'];
+    if (!el) return;
+    el.textContent = `WAVE ${wave} CLEARED — NEXT WAVE IN ${Math.ceil(breatherS)}`;
+    el.classList.add('ib-visible');
+    el.classList.remove('ib-play');
+    void el.offsetWidth; // restart the reappear animation
+    el.classList.add('ib-play');
+  }
+
+  private hideBreather(): void {
+    this.breatherDeadline = 0;
+    this.els['intermission-banner']?.classList.remove('ib-visible');
+  }
+
   private setDead(dead: boolean): void {
     this.els['death-screen']?.classList.toggle('hidden-death', !dead);
   }
@@ -341,12 +382,12 @@ export class Hud {
     if (now - this.lastRefresh < REFRESH_MS) return;
     this.lastRefresh = now;
 
-    // Minimap: 27m arena → 148px square. Player arrow rotates with yaw.
-    const MM = 148 / 27;
+    // Minimap: arena → 148px square (MM_SCALE/MM_HALF_EXTENT above).
+    // Player arrow rotates with yaw.
     const arrow = this.els['mm-player'];
     if (arrow) {
-      const mx = (state.player.currX + 13.5) * MM;
-      const mz = (state.player.currZ + 13.5) * MM;
+      const mx = (state.player.currX + MM_HALF_EXTENT) * MM_SCALE;
+      const mz = (state.player.currZ + MM_HALF_EXTENT) * MM_SCALE;
       arrow.style.setProperty(
         'transform',
         `translate(${mx.toFixed(1)}px, ${mz.toFixed(1)}px) rotate(${((-state.player.yaw * 180) / Math.PI).toFixed(1)}deg)`,
@@ -369,7 +410,7 @@ export class Hud {
         dot.style.setProperty('opacity', '1');
         dot.style.setProperty(
           'transform',
-          `translate(${((cat.x + 13.5) * MM).toFixed(1)}px, ${((cat.z + 13.5) * MM).toFixed(1)}px)`,
+          `translate(${((cat.x + MM_HALF_EXTENT) * MM_SCALE).toFixed(1)}px, ${((cat.z + MM_HALF_EXTENT) * MM_SCALE).toFixed(1)}px)`,
         );
       } else {
         dot.style.setProperty('opacity', '0');
@@ -388,21 +429,57 @@ export class Hud {
 
     const slot = w.slots[w.slot];
     const slotAmmo = slot?.ammo ?? 0;
+    const slotReserve = slot?.reserve ?? 0;
+    const cfg = WEAPONS[w.slot] ?? WEAPONS[0]!;
+    const mag = this.els['ammo-mag'];
+    if (mag) {
+      // Mag-fraction classes (not an absolute count) so this scales across
+      // guns with very different mag sizes (shotgun 6 vs smg 50). Computed
+      // every throttled refresh, independent of the text-change gate below,
+      // so switching weapons re-evaluates against the new gun's mag size
+      // even when the raw ammo digit happens to be unchanged.
+      const frac = slotAmmo / cfg.mag;
+      mag.classList.toggle('ammo-warn', frac <= 0.35);
+      mag.classList.toggle('ammo-critical', frac <= 0.15 || slotAmmo === 0);
+    }
     const ammoText = String(slotAmmo);
     if (ammoText !== this.lastAmmoText) {
       this.lastAmmoText = ammoText;
-      const mag = this.els['ammo-mag'];
       if (mag) {
         mag.textContent = ammoText;
-        mag.classList.toggle('ammo-low', slotAmmo <= 5);
         mag.classList.remove('ammo-tick'); // pop on every change
         void mag.offsetWidth;
         mag.classList.add('ammo-tick');
       }
     }
     const reserveEl = this.els['ammo-reserve'];
-    if (reserveEl) reserveEl.textContent = ` / ${slot?.reserve ?? 0}`;
+    if (reserveEl) reserveEl.textContent = ` / ${slotReserve}`;
     this.els['hud-reload']?.classList.toggle('reload-on', w.reloading);
+
+    // Reload prompt: mutually exclusive with REARMING (that only shows
+    // while w.reloading is true).
+    const promptEl = this.els['hud-reload-prompt'];
+    if (promptEl) {
+      if (slotAmmo === 0 && !w.reloading && slotReserve > 0) {
+        promptEl.textContent = 'RELOAD [R]';
+        promptEl.classList.remove('prompt-urgent');
+        promptEl.classList.add('prompt-on');
+      } else if (slotAmmo === 0 && slotReserve === 0) {
+        promptEl.textContent = 'FIND AMMO';
+        promptEl.classList.add('prompt-urgent', 'prompt-on');
+      } else {
+        promptEl.classList.remove('prompt-on', 'prompt-urgent');
+      }
+    }
+
+    // Intermission countdown: derived from the stored deadline, not a timer.
+    if (this.breatherDeadline > 0) {
+      const remainingS = Math.max(0, (this.breatherDeadline - now) / 1000);
+      const banner = this.els['intermission-banner'];
+      if (banner) {
+        banner.textContent = `WAVE ${this.breatherWave} CLEARED — NEXT WAVE IN ${Math.ceil(remainingS)}`;
+      }
+    }
 
     const hpW = Math.round(state.health.hp);
     if (hpW !== this.lastHpWidth) {
