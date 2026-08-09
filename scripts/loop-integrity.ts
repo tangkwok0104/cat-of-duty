@@ -74,6 +74,10 @@ async function main(): Promise<void> {
   if (!native) await page.evaluate(() => window.__cod.forceInputCapture(true));
   await page.waitForTimeout(400);
   step('lock pointer (arms waves)', true, native ? 'native' : 'override');
+  // Arsenal (wave 4B): runs start rifle-only — grant the full loadout so the
+  // shotgun/sniper switch steps still assert gun mechanics, not pickups.
+  // Also despawns the ground weapon pickups (no auto-switch mid-assertion).
+  await page.evaluate(() => window.__cod.grantAllWeapons());
 
   // 2. First wave spawns a cat.
   await page.waitForFunction(() => window.__cod.getGame().catsAlive > 0, undefined, {
@@ -174,6 +178,9 @@ async function main(): Promise<void> {
     !g.dead && g.hp === 100 && g.ammo === 30 && g.kills === 0 && navAfter > navBefore,
     `hp=${g.hp} ammo=${g.ammo} kills=${g.kills} (same page: ${navAfter > navBefore})`,
   );
+  // Restart resets ownership to rifle-only (and respawns the ground guns) —
+  // re-grant before the loadout steps below.
+  await page.evaluate(() => window.__cod.grantAllWeapons());
 
   // 10. Waves restart after the reset.
   await page

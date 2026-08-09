@@ -54,15 +54,21 @@ export class WeaponSystem {
     this.tracers = new Tracers(scene);
     this.decals = new Decals(scene);
     bus.on('game:restart', () => this.reset());
+    // Picking a gun up off the ground auto-switches to it — the classic
+    // FPS reward beat. WeaponPickups sets owned[slot] BEFORE emitting, so
+    // the ownership guard in requestSwitch lets this through.
+    bus.on('weapon:acquired', ({ slot }) => this.requestSwitch(slot, performance.now() / 1000));
   }
 
   get bloomMeshes(): Mesh[] {
     return this.viewmodel.bloomMeshes;
   }
 
-  /** Fill ammo slots from configs (called once from main after state init). */
+  /** Fill ammo slots from configs (called once from main after state init).
+   *  The run starts rifle-only; the rest of the arsenal is ground pickups. */
   arm(state: GameState): void {
     this.stateRef = state;
+    state.weapon.owned = WEAPONS.map((_, i) => i === 0);
     state.weapon.slots = WEAPONS.map((w) => ({ ammo: w.mag, reserve: w.reserveStart }));
     state.weapon.adsFov = this.config(state).adsFov;
     this.viewmodel.show(this.config(state));
@@ -76,6 +82,7 @@ export class WeaponSystem {
   private reset(): void {
     const state = this.stateRef;
     if (!state) return;
+    state.weapon.owned = WEAPONS.map((_, i) => i === 0); // back to rifle-only
     state.weapon.slots = WEAPONS.map((w) => ({ ammo: w.mag, reserve: w.reserveStart }));
     state.weapon.slot = 0;
     state.weapon.reloading = false;
@@ -88,14 +95,30 @@ export class WeaponSystem {
     bus.emit('weapon:switched', { slot: 0, name: WEAPONS[0]?.name ?? '' });
   }
 
-  /** 1/2/3 keys (routed by main). Cancels reload, lowers, raises. */
+  /** 1/2/3/4 keys (routed by main). Cancels reload, lowers, raises.
+   *  Unowned slots are ignored — main gives the HUD-chip-shake feedback. */
   requestSwitch(slot: number, nowS: number): void {
     const state = this.stateRef;
     if (!state || slot === state.weapon.slot || slot < 0 || slot >= WEAPONS.length) return;
+    if (!state.weapon.owned[slot]) return;
     if (state.health.dead) return;
     this.pendingSlot = slot;
     state.weapon.reloading = false; // switching cancels the reload
     state.weapon.switchingUntil = nowS + SWITCH_TIME;
+  }
+
+  /** Debug/harness only (__cod.grantAllWeapons): own every slot, full ammo. */
+  grantAllWeapons(): void {
+    const state = this.stateRef;
+    if (!state) return;
+    state.weapon.owned = WEAPONS.map(() => true);
+    for (let i = 0; i < WEAPONS.length; i++) {
+      const cfg = WEAPONS[i];
+      const slot = state.weapon.slots[i];
+      if (!cfg || !slot) continue;
+      slot.ammo = cfg.mag;
+      slot.reserve = cfg.reserveStart;
+    }
   }
 
   requestReload(nowS: number): void {

@@ -15,7 +15,7 @@ export interface Events {
   /** Quality tier changed (user or adaptive). */
   'quality:changed': { tier: number; reason: 'manual' | 'adaptive' };
   /** A shot was fired (HUD spread, sound, viewmodel kick). */
-  'weapon:fired': { hit: boolean; profile: 'rifle' | 'shotgun' | 'sniper' };
+  'weapon:fired': { hit: boolean; profile: 'rifle' | 'shotgun' | 'sniper' | 'smg' };
   /** Trigger pulled on an empty mag. */
   'weapon:dry': Record<string, never>;
   'weapon:reload-start': Record<string, never>;
@@ -39,6 +39,8 @@ export interface Events {
   'enemy:killed': { id: number; archetype: import('./GameState').CatArchetype; headshot: boolean; x: number; z: number };
   /** The player collected a drop. */
   'pickup:collected': { kind: 'health' | 'ammo' };
+  /** The player picked a weapon up off the ground. */
+  'weapon:acquired': { slot: number; name: string };
   /** The player took damage (fromX/fromZ = attacker position, for the
    *  damage-direction indicator). */
   'player:damaged': { amount: number; fromX: number; fromZ: number };

@@ -1,15 +1,14 @@
-/* Main menu overlay — dense mil-spec card, tokens only. */
+/* Main menu overlay — cinematic key-art background behind a dense
+   mil-spec settings card. Tokens only for spacing/type/color where the
+   base design system applies; local overrides only where the busy photo
+   background needs extra contrast to stay legible. */
 #menu-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(
-    ellipse at 50% 40%,
-    rgba(11, 13, 9, 0.55),
-    rgba(11, 13, 9, 0.85) 78%
-  );
+  background: var(--c-bg); /* fallback while the art image loads */
   transition: opacity var(--t-med) var(--ease-out);
   pointer-events: auto;
 }
@@ -19,37 +18,99 @@
   pointer-events: none;
 }
 
-.menu-card {
+/* Full-bleed key art with a slow Ken Burns drift. The image is oversized
+   and the layer clips itself, so the overlay never needs overflow:hidden
+   (keeps the settings card free to lay out without risk of clipping). */
+.menu-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.menu-art-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 38%;
+  transform: scale(1.06);
+  animation: menu-ken-burns 30s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes menu-ken-burns {
+  from {
+    transform: scale(1.06) translate(0, 0);
+  }
+  to {
+    transform: scale(1.16) translate(-1.5%, -1%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-art-img {
+    animation: none;
+  }
+}
+
+/* Bottom-heavy scrim: the top stays open so the key art reads, the
+   bottom two-thirds (where the card + buttons sit) goes dark enough for
+   every control to stay legible on top of a busy photo. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(6, 7, 4, 0.12) 0%,
+      rgba(6, 7, 4, 0.22) 32%,
+      rgba(6, 7, 4, 0.58) 62%,
+      rgba(6, 7, 4, 0.92) 100%
+    ),
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(6, 7, 4, 0) 0%, rgba(6, 7, 4, 0.3) 100%);
+}
+
+.menu-content {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--s2);
-  padding: var(--s4) var(--s6);
-  background: var(--panel-bg);
-  backdrop-filter: blur(calc(var(--panel-blur) * 2));
-  border: var(--panel-border);
-  border-radius: var(--radius);
+  gap: var(--s1);
+  max-width: min(92vw, 620px);
+  padding: var(--s3) 0;
 }
 
-.menu-mark {
-  width: var(--s6);
-  height: var(--s6);
-  color: var(--c-accent);
-}
-
-.menu-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-display);
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: var(--c-text);
+.menu-logo {
+  display: block;
+  width: min(40vw, 460px);
+  min-width: 220px;
+  height: auto;
+  filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 40px rgba(0, 0, 0, 0.35));
 }
 
 .menu-sub {
   font-size: var(--fs-xs);
   letter-spacing: 0.42em;
-  color: var(--c-muted);
-  margin-top: calc(-1 * var(--s1));
+  color: var(--c-text);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  padding: var(--s4) var(--s6);
+  background: linear-gradient(180deg, rgba(11, 13, 9, 0.68), rgba(11, 13, 9, 0.82));
+  backdrop-filter: blur(calc(var(--panel-blur) * 2.5));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
 }
 
 .menu-btn {
@@ -78,6 +139,7 @@
   gap: var(--s1);
   margin-top: var(--s2);
   min-width: 380px;
+  max-width: 100%;
 }
 
 .menu-row {
@@ -157,4 +219,21 @@
   letter-spacing: 0.1em;
   color: var(--c-subtle);
   margin-top: var(--s1);
+}
+
+/* Narrow viewports: trim the card padding and let the logo shrink further
+   than the 40vw rule would alone. The quality segmented control (6 chips)
+   needs ~430px to render without spilling past the card's edge — that's
+   the real floor here, wider than the settings grid's own 380px min-width,
+   so we raise the cap to match instead of forcing something narrower. */
+@media (max-width: 720px) {
+  .menu-card {
+    padding: var(--s3) var(--s3);
+  }
+  .menu-settings {
+    width: min(90vw, 430px);
+  }
+  .menu-logo {
+    width: min(60vw, 460px);
+  }
 }

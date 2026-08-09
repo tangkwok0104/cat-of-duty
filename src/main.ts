@@ -15,6 +15,7 @@ import { Health } from './player/Health';
 import { WeaponSystem } from './weapons/WeaponSystem';
 import { CatSystem } from './enemies/CatSystem';
 import { Pickups } from './gameplay/Pickups';
+import { WeaponPickups } from './gameplay/WeaponPickups';
 import { Hud } from './ui/Hud';
 import { Menu } from './ui/Menu';
 import { SoundBus } from './audio/SoundBus';
@@ -80,6 +81,8 @@ async function boot(): Promise<void> {
   postfx.addBloomMeshes(cats.bloomMeshes); // projectile glow spheres
   const pickups = new Pickups(renderSys.scene);
   postfx.addBloomMeshes(pickups.bloomMeshes); // health/ammo glow octahedra
+  const weaponPickups = new WeaponPickups(renderSys.scene);
+  postfx.addBloomMeshes(weaponPickups.bloomMeshes); // arsenal/station rings
   const hud = new Hud();
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
@@ -100,7 +103,14 @@ async function boot(): Promise<void> {
   const stats = new StatsOverlay(state, () => quality.tierName());
   const perfRun = new PerfRun(renderSys, physics);
   const tuningPanel = new TuningPanel(state);
-  installDebugApi(state, renderSys, physics, quality, perfRun, input, physics);
+  installDebugApi(state, renderSys, physics, quality, perfRun, input, physics, {
+    // Harness: own everything AND remove the ground guns — a leftover
+    // pickup could auto-switch weapons mid-assertion.
+    grantAllWeapons: () => {
+      weapon.grantAllWeapons();
+      weaponPickups.debugDespawnWeapons();
+    },
+  });
 
   input.onKeyDown('KeyQ', () => {
     const next = ((state.quality.tier + 1) % 5) as QualityTier;
@@ -108,9 +118,19 @@ async function boot(): Promise<void> {
   });
   input.onKeyDown('KeyT', () => physics.resetCrates());
   input.onKeyDown('F1', () => tuningPanel.toggle());
-  input.onKeyDown('Digit1', () => weapon.requestSwitch(0, performance.now() / 1000));
-  input.onKeyDown('Digit2', () => weapon.requestSwitch(1, performance.now() / 1000));
-  input.onKeyDown('Digit3', () => weapon.requestSwitch(2, performance.now() / 1000));
+  // 1–4 route through an ownership check: unowned slots shake their HUD
+  // chip instead of switching (WeaponSystem also guards independently).
+  const trySwitch = (slot: number): void => {
+    if (state.weapon.owned[slot] !== true) {
+      hud.denySwitch(slot);
+      return;
+    }
+    weapon.requestSwitch(slot, performance.now() / 1000);
+  };
+  input.onKeyDown('Digit1', () => trySwitch(0));
+  input.onKeyDown('Digit2', () => trySwitch(1));
+  input.onKeyDown('Digit3', () => trySwitch(2));
+  input.onKeyDown('Digit4', () => trySwitch(3));
   // R routes by context: dead = full restart, alive = reload.
   input.onKeyDown('KeyR', () => {
     if (state.health.dead) {
@@ -135,7 +155,7 @@ async function boot(): Promise<void> {
   // (which applies player movement and mirrors cat colliders).
   let wavesArmed = false;
   let deathBlend = 0;
-  const loop = new Loop(state, [player, health, cats, physics, pickups], (alpha, frameMs) => {
+  const loop = new Loop(state, [player, health, cats, physics, pickups, weaponPickups], (alpha, frameMs) => {
     const dt = frameMs / 1000;
     const now = performance.now();
     perfRun.beforeRender();
@@ -144,6 +164,7 @@ async function boot(): Promise<void> {
     weapon.frameUpdate(state, dt, now / 1000);
     cats.frameUpdate(state, now / 1000);
     pickups.frameUpdate(now / 1000);
+    weaponPickups.frameUpdate(now / 1000);
     renderSys.render(alpha, state);
     input.completeFrame(performance.now()); // closes input→render latency
     hud.frame(state, dt, now);

@@ -16,6 +16,35 @@
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
+## Combat Wave 4B — Arsenal (2026-08-09)
+
+Progression: runs start RIFLE-ONLY (`WeaponState.owned`, reset on
+restart); the rest of the roster is fixed glowing ground pickups
+(`gameplay/WeaponPickups.ts`, pattern-matched to Pickups): SCRATCH-12 at
+(-8,6.5) by the SW sandbags, LONGWHISKER on the platform top (climb
+reward), new PURR-90 SMG at (-5.5,3.2) by the west cover wall. Pickup =
+real gun GLB (~0.5 m, spin+bob) over a cool-blue emissive ring
+(bloom-registered). Walk-over: own the slot, full mag + 2 spare mags,
+AUTO-SWITCH, `weapon:acquired` (HUD toast "X ACQUIRED — [n]" + SoundBus
+3-note riff). Duplicate = +1 mag reserve, no switch. PURR-90: slot 3/key
+4, auto 900 rpm, 16 dmg (2× head), mag 50/100, 2.2 s reload, short
+falloff (12→32 m), spread 2.0°/0.35°, tiny per-shot kicks, tracers,
+higher-pitch rifle synth ('smg' profile). Two ammo stations at (10,8) /
+(-9,-9) — crate GLB @0.25 + amber ring, +1 mag reserve for every owned
+gun (capped at reserveStart), despawn → blink back in after 45 s. HUD
+slot chips 1-4: socket (unowned) / lit (owned) / amber box (active);
+pressing an unowned key shakes its chip. Keys 1-4 route through an
+ownership check in main. Harness: `__cod.grantAllWeapons()` (owns all,
+full ammo, despawns ground guns so no auto-switch mid-assertion) called
+after lock AND after the R-restart step; all 14 steps unchanged and
+passing (14/14, 0 console errors). tsc clean both configs. Screenshots:
+`screenshots/wave4b-arsenal/`. Perf unchanged (≈80-104 fps, ~90-107
+draws at ULTRA on the dev Mac). Judgment calls: ammo stations live in
+WeaponPickups (not Pickups) to keep the drop pool untouched; station
+top-ups cap at reserveStart (protects harness exact-ammo asserts);
+`weapon:fired` profile union in core/EventBus widened with 'smg'
+(required for the per-gun sound contract).
+
 ## Combat Wave 4A (2026-08-09) — animation + voice + reticle polish
 
 Death clips per style (shot = backward arch, headshot = forward slam),

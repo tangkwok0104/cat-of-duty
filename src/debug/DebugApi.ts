@@ -28,6 +28,10 @@ export interface CodApi {
   forceInputCapture(on: boolean): void;
   /** Harness-only: freeze cat AI so aimed shots test guns, not tracking. */
   setCatsFrozen(on: boolean): void;
+  /** Harness-only: own every weapon slot with full ammo, and clear the
+   *  ground weapon pickups so no aimed step can trip an auto-switch.
+   *  game:restart resets ownership — call again after a restart step. */
+  grantAllWeapons(): void;
   /** Harness-only: would a bullet from (x,y,z) hit this cat first?
    *  Uses the real physics ray — walls/crates/pillars all count. */
   lineOfSightToCat(x: number, y: number, z: number, catId: number, aimY: number): boolean;
@@ -64,6 +68,12 @@ declare global {
 
 const _losHit: BulletHit = { hit: false, collider: -1, px: 0, py: 0, pz: 0, nx: 0, ny: 0, nz: 0 };
 
+/** Arsenal hooks main wires in (WeaponSystem grant + pickup clearing) —
+ *  kept as a narrow interface so this file stays off the weapons folder. */
+export interface ArsenalDebug {
+  grantAllWeapons(): void;
+}
+
 export function installDebugApi(
   state: GameState,
   camera: CameraPoser,
@@ -72,6 +82,7 @@ export function installDebugApi(
   perfRun: PerfRun,
   input: Input,
   caster: HitscanCaster,
+  arsenal: ArsenalDebug,
 ): CodApi {
   const api: CodApi = {
     version: '0.1.0',
@@ -108,6 +119,7 @@ export function installDebugApi(
     setCatsFrozen: (on) => {
       state.debugFreezeCats = on;
     },
+    grantAllWeapons: () => arsenal.grantAllWeapons(),
     lineOfSightToCat: (x, y, z, catId, aimY) => {
       const cat = state.cats.find((c) => c.id === catId && c.phase === 'alive');
       if (!cat) return false;

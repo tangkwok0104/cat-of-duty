@@ -129,10 +129,13 @@ export interface AmmoSlot {
   reserve: number;
 }
 
-/** Three-gun loadout (M3); configs live in weapons/WeaponConfig.ts. */
+/** Loadout (M3, arsenal since wave 4B); configs live in weapons/WeaponConfig.ts. */
 export interface WeaponState {
-  /** Active loadout slot (0 rifle / 1 shotgun / 2 sniper). */
+  /** Active loadout slot (0 rifle / 1 shotgun / 2 sniper / 3 smg). */
   slot: number;
+  /** Which slots the player has acquired this run. Starts rifle-only;
+   *  the rest are ground pickups. Reset by game:restart. */
+  owned: boolean[];
   slots: AmmoSlot[];
   reloading: boolean;
   reloadEndsAt: number;
@@ -271,6 +274,7 @@ export function createGameState(): GameState {
     crates: null,
     weapon: {
       slot: 0,
+      owned: [], // filled by the WeaponSystem (rifle-only start)
       slots: [], // filled from configs by the WeaponSystem
       reloading: false,
       reloadEndsAt: 0,

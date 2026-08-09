@@ -13,7 +13,7 @@ export interface FalloffCurve {
 }
 
 export interface WeaponConfig {
-  id: 'rifle' | 'shotgun' | 'sniper';
+  id: 'rifle' | 'shotgun' | 'sniper' | 'smg';
   name: string;
   auto: boolean;
   rpm: number;
@@ -40,7 +40,7 @@ export interface WeaponConfig {
   penetrationMult: number;
   tracer: boolean;
   /** Sound flavour for the synth bus. */
-  soundProfile: 'rifle' | 'shotgun' | 'sniper';
+  soundProfile: 'rifle' | 'shotgun' | 'sniper' | 'smg';
   /** Viewmodel silhouette parameters (box-gun builder — placeholder shown
    *  until the real GLB below finishes loading). */
   model: {
@@ -168,6 +168,53 @@ export const WEAPONS: readonly WeaponConfig[] = [
       position: [0, -0.045, -0.22],
       rotation: [0, -Math.PI / 2 + 0.15, 0],
       muzzleLocal: [-0.95, -0.03, 0],
+    },
+  },
+  {
+    id: 'smg',
+    name: 'PURR-90',
+    auto: true,
+    rpm: 900,
+    // 15 rounds/s × 16 = 240 DPS: below the rifle's 300 but with a 50-round
+    // mag — the hose you spray when cats swarm, not the precision pick.
+    damage: 16,
+    headshotMult: 2,
+    pellets: 1,
+    // Shortish reach: full damage inside room-fight range, falls off fast.
+    falloff: { start: 12, end: 32, minMult: 0.5 },
+    spreadHipDeg: 2.0, // a touch wider than the rifle's 1.6
+    spreadAdsDeg: 0.35,
+    mag: 50,
+    reserveStart: 100,
+    reloadS: 2.2,
+    adsFov: 58,
+    adsTimeS: 0.12, // snappiest ADS in the roster — the run-and-gun pick
+    // Many tiny kicks with a lazy left-right wander: high rate + small
+    // per-shot rise = a controllable spray that still climbs if mashed.
+    recoilPattern: [
+      R(0.008, 0.000), R(0.009, 0.001), R(0.010, 0.002), R(0.010, 0.003),
+      R(0.011, 0.002), R(0.011, 0.000), R(0.011, -0.002), R(0.012, -0.003),
+      R(0.012, -0.002), R(0.012, 0.000), R(0.012, 0.002), R(0.012, 0.003),
+      R(0.012, 0.001), R(0.012, -0.001), R(0.012, -0.003), R(0.012, 0.000),
+    ],
+    recoilResetS: 0.25,
+    penetration: 0,
+    penetrationMult: 0.5,
+    tracer: true,
+    soundProfile: 'smg',
+    model: { barrelLen: 0.16, barrelRadius: 0.012, receiverLen: 0.22, magH: 0.14, scope: false, pump: false },
+    // smg.glb bbox (probe .tmp/smg-bbox.ts): x[-0.842,0.841] y[-0.950,0.948]
+    // z[-0.146,0.144] — muzzle at -X like the other guns; the tall Y span is
+    // its skeletal amber sight (up) + long magazine (down). Barrel line sits
+    // ~0.12 above local origin, hence the muzzleLocal y.
+    viewModel: {
+      file: 'smg',
+      scale: 0.1,
+      // y tuned by screenshot vs the rifle's ADS standard (sights just under
+      // centre): -0.06 left the peep ring far low; -0.03 matches the roster.
+      position: [0, -0.03, -0.18],
+      rotation: [0, -Math.PI / 2 + 0.15, 0],
+      muzzleLocal: [-0.84, 0.12, 0],
     },
   },
 ];

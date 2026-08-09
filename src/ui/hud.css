@@ -183,16 +183,46 @@
   gap: var(--s05);
 }
 
+/* Arsenal chips: unowned = dimmed socket, owned = lit, active = accent box.
+   Every chip keeps the dark panel backing so "dimmed" still reads against
+   bright floor — an invisible hint is no hint. */
 .weapon-pip {
   font-size: var(--fs-xs);
-  color: var(--c-subtle);
-  min-width: 14px;
+  color: var(--c-muted);
+  min-width: 16px;
+  padding: 1px 3px;
   text-align: center;
+  background: var(--panel-bg);
+  border: 1px solid rgba(233, 230, 215, 0.12);
+  border-radius: var(--radius);
+  opacity: 0.55;
+  transition: opacity var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
+}
+
+.weapon-pip.pip-owned {
+  color: var(--c-text);
+  border-color: rgba(233, 230, 215, 0.3);
+  opacity: 1;
 }
 
 .weapon-pip.pip-active {
   color: var(--c-accent);
   font-weight: 700;
+  border-color: rgba(255, 176, 46, 0.55);
+  background: rgba(255, 176, 46, 0.12);
+}
+
+/* Pressed the key for a gun not yet found: quick sideways shake. */
+.weapon-pip.pip-deny {
+  animation: pip-deny 260ms var(--ease-snap);
+}
+
+@keyframes pip-deny {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
 }
 
 /* ---- Score ---- */
@@ -240,6 +270,27 @@
   15% { opacity: 1; transform: translateX(-50%) translateY(0); }
   75% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* ---- Weapon-acquire toast ----
+   Same rise-and-fade language as the wave toast, one register smaller and
+   lower so the two can't collide when a wave starts mid-pickup. */
+.acquire-toast {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--c-accent);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+}
+
+.acquire-toast.toast-play {
+  animation: toast 1.6s var(--ease-out);
 }
 
 /* ---- Minimap ---- */

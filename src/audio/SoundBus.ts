@@ -73,6 +73,7 @@ export class SoundBus {
     bus.on('player:died', () => this.death());
     bus.on('enemy:fired', () => this.zap());
     bus.on('pickup:collected', ({ kind }) => this.pickup(kind));
+    bus.on('weapon:acquired', () => this.weaponAcquired());
 
     // --- recorded cat vocals (M-audio pass) ------------------------------
     // Distance attenuation note: 'enemy:windup' carries x/z, but SoundBus is
@@ -200,18 +201,22 @@ export class SoundBus {
   }
 
   /** Gunshot: white-noise crack through a falling lowpass + a thump.
-   *  Per-gun flavour: shotgun = longer/deeper boom, sniper = sharper crack. */
-  private shot(profile: 'rifle' | 'shotgun' | 'sniper'): void {
+   *  Per-gun flavour: shotgun = longer/deeper boom, sniper = sharper crack,
+   *  smg = the rifle pattern shortened and pitched up (900 rpm chatter). */
+  private shot(profile: 'rifle' | 'shotgun' | 'sniper' | 'smg'): void {
     const ctx = this.ctx;
     const out = this.master;
     if (!ctx || !out) return;
     const t = this.now();
 
-    const noiseLen = profile === 'shotgun' ? 0.16 : profile === 'sniper' ? 0.12 : 0.09;
-    const lpStart = profile === 'shotgun' ? 2600 : profile === 'sniper' ? 7000 : 5200;
-    const lpEnd = profile === 'shotgun' ? 220 : 500;
-    const thumpF = profile === 'shotgun' ? 95 : profile === 'sniper' ? 180 : 150;
-    const thumpVol = profile === 'rifle' ? 0.5 : 0.65;
+    const noiseLen =
+      profile === 'shotgun' ? 0.16 : profile === 'sniper' ? 0.12 : profile === 'smg' ? 0.07 : 0.09;
+    const lpStart =
+      profile === 'shotgun' ? 2600 : profile === 'sniper' ? 7000 : profile === 'smg' ? 6400 : 5200;
+    const lpEnd = profile === 'shotgun' ? 220 : profile === 'smg' ? 700 : 500;
+    const thumpF =
+      profile === 'shotgun' ? 95 : profile === 'sniper' ? 180 : profile === 'smg' ? 200 : 150;
+    const thumpVol = profile === 'rifle' ? 0.5 : profile === 'smg' ? 0.42 : 0.65;
     const buffer = ctx.createBuffer(1, ctx.sampleRate * noiseLen, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) {
@@ -273,6 +278,14 @@ export class SoundBus {
     const base = kind === 'ammo' ? 1320 : 1046;
     this.tone(base, 0.05, 0.4, 'sine', base * 1.5);
     setTimeout(() => this.tone(base * 1.5, 0.08, 0.35, 'sine'), 45);
+  }
+
+  /** New gun off the ground: quick rising three-note riff — the victory
+   *  ding family (kill confirm / pickup), stretched into a little fanfare. */
+  private weaponAcquired(): void {
+    this.tone(660, 0.07, 0.4, 'square', 880);
+    setTimeout(() => this.tone(990, 0.07, 0.4, 'square'), 70);
+    setTimeout(() => this.tone(1320, 0.12, 0.45, 'square', 1760), 140);
   }
 
   /** Player hurt: short low grunt. */

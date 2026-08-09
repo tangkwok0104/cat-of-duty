@@ -1,6 +1,7 @@
 import type { GameState, CatArchetype } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import { ARCHETYPES } from '../enemies/EnemyConfig';
+import { WEAPONS } from '../weapons/WeaponConfig';
 
 const REFRESH_MS = 100;
 
@@ -36,14 +37,14 @@ export class Hud {
     // Killfeed reads the victim's name off enemy:killed — the cat may
     // already be gone from state.cats by the time the entry renders.
     bus.on('enemy:killed', ({ archetype, headshot }) => this.killfeed(archetype, headshot));
-    bus.on('weapon:switched', ({ slot, name }) => {
+    bus.on('weapon:switched', ({ name }) => {
       this.weaponName = name;
       const el = this.els['weapon-name'];
       if (el) el.textContent = name;
-      for (let i = 0; i < 3; i++) {
-        this.els[`pip-${i}`]?.classList.toggle('pip-active', i === slot);
-      }
+      // Chip owned/active states refresh from GameState in frame() — the
+      // slot event alone can't know ownership.
     });
+    bus.on('weapon:acquired', ({ slot, name }) => this.acquireToast(slot, name));
     bus.on('player:damaged', ({ fromX, fromZ }) => {
       this.vignette = 1;
       this.dmgFromX = fromX;
@@ -116,13 +117,14 @@ export class Hud {
     make('lowhp-vignette', 'lowhp-vignette', this.root);
     make('killfeed', 'killfeed', this.root);
 
-    // Bottom-right: weapon name + slot pips + ammo.
+    // Bottom-right: weapon name + slot chips + ammo. Chips carry arsenal
+    // state: owned = lit, active = accent, unowned = dimmed hint.
     const weaponRow = make('hud-weapon', 'hud-weapon', this.root);
     const wName = document.createElement('span');
     wName.className = 'weapon-name';
     const pips = document.createElement('span');
     pips.className = 'weapon-pips';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < WEAPONS.length; i++) {
       const pip = document.createElement('span');
       pip.className = 'weapon-pip';
       pip.textContent = String(i + 1);
@@ -154,6 +156,7 @@ export class Hud {
     this.els['score-wave'] = wave;
 
     make('wave-toast', 'wave-toast', this.root);
+    make('acquire-toast', 'acquire-toast', this.root);
     make('damage-vignette', 'damage-vignette', this.root);
 
     // Sniper scope overlay: circular mask + star reticle, shown when scoped.
@@ -243,6 +246,25 @@ export class Hud {
       entry.classList.add('kf-out');
       setTimeout(() => entry.remove(), 400);
     }, 3200);
+  }
+
+  /** Pressed the key for a gun not yet found: shake its chip — quiet "not
+   *  yours yet" feedback, no error-sound spam (main routes this). */
+  denySwitch(slot: number): void {
+    const pip = this.els[`pip-${slot}`];
+    if (!pip) return;
+    pip.classList.remove('pip-deny');
+    void pip.offsetWidth; // restart the CSS animation
+    pip.classList.add('pip-deny');
+  }
+
+  private acquireToast(slot: number, name: string): void {
+    const t = this.els['acquire-toast'];
+    if (!t) return;
+    t.textContent = `${name} ACQUIRED — [${slot + 1}]`;
+    t.classList.remove('toast-play');
+    void t.offsetWidth;
+    t.classList.add('toast-play');
   }
 
   private waveToast(wave: number): void {
@@ -352,6 +374,16 @@ export class Hud {
       } else {
         dot.style.setProperty('opacity', '0');
       }
+    }
+
+    // Slot chips: owned = lit, active = accent, unowned = dimmed. Read from
+    // state each refresh so restarts (ownership reset) can't desync them.
+    for (let i = 0; i < WEAPONS.length; i++) {
+      const pip = this.els[`pip-${i}`];
+      if (!pip) continue;
+      const owned = w.owned[i] === true;
+      pip.classList.toggle('pip-owned', owned);
+      pip.classList.toggle('pip-active', owned && w.slot === i);
     }
 
     const slot = w.slots[w.slot];
