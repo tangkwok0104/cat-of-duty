@@ -22,3 +22,6 @@ commercial game. Log every asset here as it is added.
 | `public/assets/gen/models/catsoldier-death-back.glb` / `-death-fwd.glb` | Death clips (Meshy actions 183/184) | Same pipeline, 2026-08-09 | Original generated content |
 | `public/assets/gen/models/catsoldier-hit.glb` / `-attack.glb` / `-run.glb` | Hit-react / melee swipe / in-place run clips (Meshy actions 178/96/657) | Same pipeline, 2026-08-09 | Original generated content |
 | `public/assets/gen/audio/*.mp3` (6: battle meow, hiss, death yowl, heavy growl, alert chirp, victory meow) | Cat vocal SFX | Generated via Higgsfield (Mirelo text-to-audio) on project owner's account, 2026-08-09 | Original generated content |
+| `public/assets/gen/audio/*.mp3` (8: per-gun shots ×4, reload, dryfire, concrete impact, projectile whoosh) | Weapon SFX | Same pipeline, 2026-08-09 | Original generated content |
+| `public/assets/gen/models/smg.glb` | PURR-90 viewmodel mesh | Recraft V4.1 image → Meshy image-to-3D, 2026-08-09 | Original generated content |
+| `public/assets/gen/ui/menu-keyart.png` + `logo.svg` | Menu key art + stencil logo | Nano Banana / Recraft V4.1 vector, 2026-08-09 | Original generated content |
