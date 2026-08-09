@@ -1,7 +1,15 @@
 # Asset Credits
 
-All assets are CC0 or CC-BY. Nothing is copied from Call of Duty or any
-commercial game. Log every asset here as it is added.
+Nothing here is copied from Call of Duty or any other commercial game. Log
+every asset here as it is added.
+
+Two groups, and they carry different terms — see
+[`LICENSE-ASSETS.md`](./LICENSE-ASSETS.md) for the full statement:
+
+- **Poly Haven textures + HDRI — CC0**, free to reuse.
+- **Everything under `public/assets/gen/` — generated on the project owner's
+  own accounts, rights reserved.** Not covered by the repository's code
+  license and not offered for reuse.
 
 | Asset | Type | Source | License |
 |---|---|---|---|
