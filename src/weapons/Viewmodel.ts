@@ -1,26 +1,42 @@
 import {
   BoxGeometry,
   CylinderGeometry,
+  Euler,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
   PointLight,
+  Quaternion,
   SphereGeometry,
   Vector3,
   DoubleSide,
   type PerspectiveCamera,
 } from 'three';
+import { loadModel } from '../core/Assets';
 import type { WeaponConfig } from './WeaponConfig';
 
 const _muzzle = new Vector3();
+const _localPos = new Vector3();
+const _localScale = new Vector3();
+const _localQuat = new Quaternion();
+const _localEuler = new Euler();
+const _localMat = new Matrix4();
 
 /** Parameterized placeholder box-gun (per-config silhouette) held by a cat
  *  paw, parented to the camera. Three distinct reads: carbine, wide-bore
- *  pump, long scoped rifle. Swapped for real models when /assets lands. */
+ *  pump, long scoped rifle. Each per-gun group holds BOTH the placeholder
+ *  (visible immediately) and an empty `modelHolder` — the real GLB is
+ *  loaded lazily (loadModel) and, on resolve, swapped in: modelHolder gets
+ *  the scene + this gun's viewModel transform, placeholder hides. Sway/
+ *  recoil/ADS/dip all act on the outer `this.group`, so the swap is
+ *  invisible to that feel code either way. */
 export class Viewmodel {
   readonly group = new Group();
   private guns = new Map<string, Group>();
+  private placeholders = new Map<string, Group>();
+  private modelHolders = new Map<string, Group>();
   private muzzleTips = new Map<string, Vector3>();
   private flashLight: PointLight;
   private flashStar: Mesh;
@@ -42,6 +58,7 @@ export class Viewmodel {
       gun.visible = false;
       this.guns.set(cfg.id, gun);
       this.group.add(gun);
+      this.loadRealModel(cfg);
     }
 
     this.flashLight = new PointLight(0xffc46e, 0, 7, 2);
@@ -104,29 +121,85 @@ export class Viewmodel {
     paw2.position.set(0, -0.035, barrelZ + m.barrelLen / 2 - 0.02);
     paw2.scale.set(1, 0.8, 1.4);
 
-    gun.add(receiver, barrel, mag, stock, chip, paw1, paw2);
+    const placeholder = new Group();
+    placeholder.add(receiver, barrel, mag, stock, chip, paw1, paw2);
 
     if (m.scope) {
       const tube = new Mesh(new CylinderGeometry(0.02, 0.02, 0.14, 12), gunmetal);
       tube.rotation.x = Math.PI / 2;
       tube.position.set(0, 0.065, -0.02);
-      gun.add(tube);
+      placeholder.add(tube);
     } else {
       const frontSight = new Mesh(new BoxGeometry(0.006, 0.03, 0.012), gunmetal);
       frontSight.position.set(0, 0.052, barrelZ + 0.02);
       const rearSight = new Mesh(new BoxGeometry(0.024, 0.022, 0.012), gunmetal);
       rearSight.position.set(0, 0.048, m.receiverLen / 2 - 0.08);
-      gun.add(frontSight, rearSight);
+      placeholder.add(frontSight, rearSight);
     }
     if (m.pump) {
       const pump = new Mesh(new BoxGeometry(0.05, 0.045, 0.12), polymer);
       pump.position.set(0, -0.03, barrelZ + 0.05);
-      gun.add(pump);
+      placeholder.add(pump);
     }
+    gun.add(placeholder);
+    this.placeholders.set(cfg.id, placeholder);
+
+    // Empty until the real GLB resolves (loadRealModel); stays invisible
+    // the whole time the placeholder is shown.
+    const modelHolder = new Group();
+    modelHolder.visible = false;
+    gun.add(modelHolder);
+    this.modelHolders.set(cfg.id, modelHolder);
 
     // Muzzle tip in group-local space (for flash placement + tracer origin).
+    // Replaced with a GLB-derived tip once the real model loads.
     this.muzzleTips.set(cfg.id, new Vector3(0, 0.012, barrelZ - m.barrelLen / 2 - 0.02));
     return gun;
+  }
+
+  /** Fire-and-forget: swap the box placeholder for the real GLB once it
+   *  resolves. Never awaited by callers — must not gate boot/ready. */
+  private loadRealModel(cfg: WeaponConfig): void {
+    const vm = cfg.viewModel;
+    loadModel(vm.file)
+      .then((gltf) => {
+        const holder = this.modelHolders.get(cfg.id);
+        if (!holder) return; // Viewmodel torn down before load finished.
+        const scene = gltf.scene;
+        scene.traverse((obj) => {
+          if (obj instanceof Mesh) {
+            obj.castShadow = false;
+            obj.frustumCulled = false; // hugs the near plane; never cull it
+          }
+        });
+        holder.position.set(vm.position[0], vm.position[1], vm.position[2]);
+        holder.rotation.set(vm.rotation[0], vm.rotation[1], vm.rotation[2]);
+        holder.scale.setScalar(vm.scale);
+        holder.add(scene);
+        holder.visible = true;
+        this.placeholders.get(cfg.id)!.visible = false;
+
+        // Re-derive the muzzle tip from the model's own transform so flash/
+        // tracer anchor to the GLB's actual barrel, not the box guess.
+        _localMat.compose(
+          _localPos.set(vm.position[0], vm.position[1], vm.position[2]),
+          _localQuat.setFromEuler(_localEuler.set(vm.rotation[0], vm.rotation[1], vm.rotation[2])),
+          _localScale.setScalar(vm.scale),
+        );
+        const tip = new Vector3(
+          vm.muzzleLocal[0],
+          vm.muzzleLocal[1],
+          vm.muzzleLocal[2],
+        ).applyMatrix4(_localMat);
+        this.muzzleTips.set(cfg.id, tip);
+        if (this.active?.id === cfg.id) {
+          this.flashStar.position.copy(tip);
+          this.flashLight.position.copy(tip);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error(`[Viewmodel] failed to load model "${vm.file}" for ${cfg.id}`, err);
+      });
   }
 
   show(cfg: WeaponConfig): void {

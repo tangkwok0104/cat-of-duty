@@ -5,14 +5,18 @@ import {
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  PlaneGeometry,
   PointLight,
   Quaternion,
+  SRGBColorSpace,
+  TextureLoader,
   Vector3,
   type Scene,
   type Material,
 } from 'three';
 import type { GameState } from '../core/GameState';
 import type { PbrMaps } from '../core/Assets';
+import { loadModel } from '../core/Assets';
 import { bus } from '../core/EventBus';
 
 export interface LevelTextures {
@@ -341,6 +345,168 @@ export function buildGreyBoxRoom(
   panel.position.set(0, 2.1, wallInnerZ + 0.055);
   scene.add(panel);
   bloomMeshes.push(panel);
+
+  // ---- Wall posters (textured planes, flush-mounted) ----
+  // Source art is 665×1024 px — use its real pixel aspect so the print
+  // isn't stretched. East wall poster sits near the player spawn (2.5, 0.9,
+  // 9.5) so it's the first thing visible turning right out of spawn; west
+  // wall gets the companion poster on the opposite side of the arena.
+  const POSTER_H = 1.4;
+  const POSTER_ASPECT = 665 / 1024;
+  const POSTER_W = POSTER_H * POSTER_ASPECT;
+  const POSTER_Y = 1.75; // eye-height-ish, matches the pillar strip/red panel band
+  const FRAME_MARGIN = 0.08;
+  const posterTexLoader = new TextureLoader();
+
+  /** Flush-mount a framed poster on a wall. (normalX, normalZ) is the unit
+   *  direction the art faces (into the room); rotY must rotate the plane's
+   *  default +Z-facing normal to match it. No collider — flush geometry. */
+  function mountPoster(
+    url: string,
+    x: number,
+    y: number,
+    z: number,
+    rotY: number,
+    normalX: number,
+    normalZ: number,
+  ): void {
+    const frameMat = new MeshStandardMaterial({
+      color: 0x18160f,
+      roughness: 0.85,
+      metalness: 0.05,
+    });
+    const frame = new Mesh(
+      new BoxGeometry(POSTER_W + FRAME_MARGIN * 2, POSTER_H + FRAME_MARGIN * 2, 0.04),
+      frameMat,
+    );
+    // Own Quaternion, NOT the shared `_q` temp: the texture callback below
+    // fires asynchronously, by which point a second mountPoster() call would
+    // have already overwritten `_q` with ITS rotation — silently rotating
+    // this poster's plane to face the wrong way (culled, so the plane
+    // effectively vanishes and only the frame box shows).
+    const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), rotY);
+    frame.position.set(x, y, z);
+    frame.quaternion.copy(q);
+    frame.castShadow = true;
+    frame.receiveShadow = true;
+    scene.add(frame);
+
+    // Poster art loads independently of the level build — placeholder is
+    // just the dark frame until the texture resolves.
+    posterTexLoader.load(url, (tex) => {
+      tex.colorSpace = SRGBColorSpace;
+      const mat = new MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 });
+      const plane = new Mesh(new PlaneGeometry(POSTER_W, POSTER_H), mat);
+      // 0.025 proud of the frame's front face (half-thickness 0.02) — clears
+      // z-fighting without a visible air gap.
+      plane.position.set(x + normalX * 0.025, y, z + normalZ * 0.025);
+      plane.quaternion.copy(q);
+      scene.add(plane);
+    });
+  }
+
+  mountPoster(
+    '/assets/gen/posters/enlist-meow.png',
+    ROOM_HALF - 0.03, POSTER_Y, 7,
+    -Math.PI / 2, -1, 0, // east wall, facing -X into the room
+  );
+  mountPoster(
+    '/assets/gen/posters/loose-whiskers.png',
+    -ROOM_HALF + 0.03, POSTER_Y, -3,
+    Math.PI / 2, 1, 0, // west wall, facing +X into the room
+  );
+
+  // ---- Sandbag cover stacks (GLB, lazy-loaded) ----
+  // Bbox inspection (.tmp/gen/prop-bbox.ts): local bounds roughly
+  // x[-0.949,0.948] y[-0.879,0.873] z[-0.791,0.786], near-cubic. Scale 0.84
+  // → ~1.6 m wide stack per the inspection brief. Collider top is pinned to
+  // 1.1 m — NOT the mesh's true scaled height (~1.47 m) — to match
+  // hasLineOfSight's LOS_MIN_TOP_Y=1.0 contract (see CatProjectiles.ts) and
+  // the mid-field cover walls' own top-1.1 convention above: the visual
+  // stack reads taller than the physical cover box, same trade every prefab
+  // cover asset in the file makes once the mesh isn't custom-built to spec.
+  const SANDBAG_SCALE = 0.84;
+  const SANDBAG_MIN_Y = -0.879;
+  const SANDBAG_HALF_X = 0.949;
+  const SANDBAG_HALF_Z = 0.789;
+  const SANDBAG_COVER_TOP = 1.1;
+  const sandbagDefs: { x: number; z: number; rotY: number }[] = [
+    { x: -8.5, z: 3.0, rotY: 0.35 }, // SW quadrant open ground
+    { x: 9.0, z: -4.0, rotY: -0.2 }, // guards the platform's south stair approach
+  ];
+  for (const d of sandbagDefs) {
+    state.level.staticColliders.push({
+      x: d.x, y: SANDBAG_COVER_TOP / 2, z: d.z,
+      hx: SANDBAG_HALF_X * SANDBAG_SCALE,
+      hy: SANDBAG_COVER_TOP / 2,
+      hz: SANDBAG_HALF_Z * SANDBAG_SCALE,
+      rotY: d.rotY,
+    });
+  }
+  loadModel('sandbags')
+    .then((gltf) => {
+      for (const d of sandbagDefs) {
+        const inst = gltf.scene.clone(true);
+        inst.traverse((obj) => {
+          if (obj instanceof Mesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        inst.scale.setScalar(SANDBAG_SCALE);
+        // -minY*scale lifts the mesh so its lowest vertex sits on y=0.
+        inst.position.set(d.x, -SANDBAG_MIN_Y * SANDBAG_SCALE, d.z);
+        inst.rotation.y = d.rotY;
+        scene.add(inst);
+      }
+    })
+    .catch((err: unknown) => {
+      console.error('[GreyBoxRoom] failed to load sandbags.glb', err);
+    });
+
+  // ---- Ammo crate props (GLB, lazy-loaded) ----
+  // Bbox inspection (.tmp/gen/prop-bbox.ts): local bounds roughly
+  // x[-0.949,0.947] y[-0.558,0.555] z[-0.483,0.481]. Scale 0.47 → ~0.9 m
+  // crate per the inspection brief. Collider matches the full scaled mesh
+  // (unlike the sandbags, no LOS-height override needed — these are scatter
+  // props, not cover).
+  const CRATE_PROP_SCALE = 0.47;
+  const CRATE_PROP_MIN_Y = -0.558;
+  const CRATE_PROP_HALF_X = 0.948;
+  const CRATE_PROP_HALF_Y = 0.556;
+  const CRATE_PROP_HALF_Z = 0.482;
+  const cratePropDefs: { x: number; z: number; rotY: number; groundY: number }[] = [
+    { x: -3.3, z: -2.5, rotY: 0.4, groundY: 0 }, // scatter beside cover cluster A
+    { x: 8.8, z: -8.6, rotY: -0.6, groundY: PLATFORM_TOP }, // reward prop on the platform
+  ];
+  for (const d of cratePropDefs) {
+    state.level.staticColliders.push({
+      x: d.x, y: d.groundY + CRATE_PROP_HALF_Y * CRATE_PROP_SCALE, z: d.z,
+      hx: CRATE_PROP_HALF_X * CRATE_PROP_SCALE,
+      hy: CRATE_PROP_HALF_Y * CRATE_PROP_SCALE,
+      hz: CRATE_PROP_HALF_Z * CRATE_PROP_SCALE,
+      rotY: d.rotY,
+    });
+  }
+  loadModel('crate')
+    .then((gltf) => {
+      for (const d of cratePropDefs) {
+        const inst = gltf.scene.clone(true);
+        inst.traverse((obj) => {
+          if (obj instanceof Mesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        inst.scale.setScalar(CRATE_PROP_SCALE);
+        inst.position.set(d.x, d.groundY - CRATE_PROP_MIN_Y * CRATE_PROP_SCALE, d.z);
+        inst.rotation.y = d.rotY;
+        scene.add(inst);
+      }
+    })
+    .catch((err: unknown) => {
+      console.error('[GreyBoxRoom] failed to load crate.glb', err);
+    });
 
   bus.emit('level:built', { csmMaterials, bloomMeshes, dynamicCrateMesh: dynamicCrates });
 }

@@ -16,7 +16,59 @@
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
-## Combat Wave 1 (2026-08-09) — cats that shoot back
+## Combat Wave 3 (2026-08-09) — GLB integration (the visual transformation)
+
+Real gun viewmodels (rifle/shotgun/sniper GLBs; per-gun transforms
+data-driven in WeaponConfig.viewModel, ADS re-centered by zeroing per-gun
+x; shotgun ADS pitched 0.38 to fight its thin-cylinder silhouette — known
+compromise). Arena dressed: 2 wall posters (a caught-and-fixed async temp-
+quaternion bug had one facing into the wall), 2 sandbag stacks + 2 ammo
+crates with synchronous colliders. Enemies are now SkeletonUtils clones of
+the rigged cat soldier: master mesh from catsoldier.glb + walk/idle clips
+retargeted from the proxy-mesh clip files (spec deviation, correct — clip
+files carry low-poly proxies), scale contract head-centre→0.95 (measured
+0.8513, baseScale 1.1159), mixer walk/idle crossfade on displacement,
+windup eye-flare via bone-parented emissive spheres, archetype tints
+(gunner brown/heavy slate — tint must multiply emissive too, the GLB is
+self-lit). Three real bugs fixed by the builder's screenshot loop
+(three/addons double-bundle broke instanceof; tint invisible; cm-scale
+bones shrank eyes 100×). Gates: tsc 0, build green, loop 14/14 ×2 (hitbox
+math intact), combat draws 255→120. Over-budget notes: combat tris 524.9k
+vs 500k (~5%) and p95 ~4-9% over — cat remesh (25.9k→~10k tris) queued as
+a pure asset swap; viewmodel scale polish queued.
+
+## Combat Wave 2 (2026-08-09) — loot drops + honest visual QA
+
+Pickups (`gameplay/Pickups.ts`): 30% drop on kill, health (+25, only when
+hp<70 at roll / hp<100 to collect) or ammo (one mag of the active gun, only
+when reserve below start-cap), pooled ×16, bloom-lit octahedrons, 2m magnet
+0.6m collect, useless pickups stay inert, 20s despawn with blink, synth
+collect ding (ammo a fifth up). Freeze-safe for the harness; restart clears.
+Gates: tsc 0, build green, loop 14/14 ×2.
+
+**Visual QA verdict (screenshots, eyeballed — the honest part):** the
+procedural cats read as blobby bowling pins up close; heavy's helmet plate
+floats above the head; vest arm-box artifact on rusher. Functional layer
+(walk desync, telegraphs, per-type palette) works, silhouettes don't.
+Superseded by the generated-GLB cat path below rather than polished.
+Perf finding: in-combat draws hit 232–305 vs 150 budget (7 casters/cat ×
+CSM) → shadow-caster trim to torso+head landed; orbit-mode p95 miss in the
+same gate run attributed to parallel Playwright contention (identical
+draws/tris/heap vs the 9.2ms run earlier) — re-verify serialized.
+
+## Generated-asset pipeline (2026-08-09) — Higgsfield → GLB
+
+M4/M6's asset blockade is broken without the human download: images
+generated on the project owner's Higgsfield account (Recraft V4.1 utility
+for product shots, Nano Banana for the character), lifted to GLB via Meshy
+image-to-3D (textured + PBR). Landed in `public/assets/gen/`, logged in
+CREDITS.md: PAWS-15 / SCRATCH-12 / LONGWHISKER viewmodel meshes, sandbag +
+ammo-crate props, two parody propaganda posters (ENLIST MEOW! / LOOSE
+WHISKERS SINK SHIPS), and an auto-rigged bipedal cat soldier (A-pose,
+skeleton baked). Walk (clip 30) + idle (clip 0) animation variants baking
+server-side. Render-inspection of all six GLBs in progress before any
+integration; guns/props/posters integrate first, cat swap only if the rig
+passes eyeball QA. ~185 credits spent of 2,395.
 
 Three enemy archetypes, data-driven in `enemies/EnemyConfig.ts` (same typed-TS
 pattern as WeaponConfig): **RUSHER** (fast melee), **GUNNER** (holds ~7m,

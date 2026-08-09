@@ -5,6 +5,7 @@ import {
   type Texture,
 } from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 
 export interface PbrMaps {
   map: Texture;
@@ -70,4 +71,22 @@ export async function loadHdri(onProgress: (label: string) => void): Promise<Tex
   const tex = await hdrLoader.loadAsync(HDRI_URL);
   onProgress('hdri');
   return tex;
+}
+
+/** Generated GLB models (Higgsfield pipeline — see CREDITS.md). Loaded
+ *  lazily AFTER boot: systems keep their placeholder visuals until the
+ *  promise resolves, then swap. Never gate `ready` on these. Meshy GLBs
+ *  normalize their long axis (~1.9) / character height (1.0) — callers MUST
+ *  apply an explicit scale; the file's own size is not meters. */
+const MODEL_ROOT = '/assets/gen/models';
+const gltfLoader = new GLTFLoader();
+const modelCache = new Map<string, Promise<GLTF>>();
+
+export function loadModel(name: string): Promise<GLTF> {
+  let p = modelCache.get(name);
+  if (!p) {
+    p = gltfLoader.loadAsync(`${MODEL_ROOT}/${name}.glb`);
+    modelCache.set(name, p);
+  }
+  return p;
 }

@@ -41,7 +41,8 @@ export interface WeaponConfig {
   tracer: boolean;
   /** Sound flavour for the synth bus. */
   soundProfile: 'rifle' | 'shotgun' | 'sniper';
-  /** Viewmodel silhouette parameters (box-gun builder). */
+  /** Viewmodel silhouette parameters (box-gun builder — placeholder shown
+   *  until the real GLB below finishes loading). */
   model: {
     barrelLen: number;
     barrelRadius: number;
@@ -49,6 +50,20 @@ export interface WeaponConfig {
     magH: number;
     scope: boolean;
     pump: boolean;
+  };
+  /** Real GLB viewmodel (Assets.loadModel(file)), placed inside the same
+   *  per-gun group the box placeholder occupies. The GLB's long axis is
+   *  world +X with the muzzle at local -X (verified by bounding-box probe,
+   *  see .tmp/glb-bbox.ts); rotation.y = -PI/2 turns that into local -Z
+   *  (away from camera) to match the placeholder's barrel convention.
+   *  `muzzleLocal` is the muzzle tip in the GLB's own untransformed space —
+   *  scale→rotate→translate turns it into the flash/tracer anchor. */
+  viewModel: {
+    file: string;
+    scale: number;
+    position: readonly [number, number, number];
+    rotation: readonly [number, number, number];
+    muzzleLocal: readonly [number, number, number];
   };
 }
 
@@ -83,6 +98,13 @@ export const WEAPONS: readonly WeaponConfig[] = [
     tracer: true,
     soundProfile: 'rifle',
     model: { barrelLen: 0.24, barrelRadius: 0.014, receiverLen: 0.3, magH: 0.11, scope: false, pump: false },
+    viewModel: {
+      file: 'rifle',
+      scale: 0.15,
+      position: [0, -0.03, -0.2],
+      rotation: [0, -Math.PI / 2, 0],
+      muzzleLocal: [-0.95, -0.02, 0],
+    },
   },
   {
     id: 'shotgun',
@@ -109,6 +131,13 @@ export const WEAPONS: readonly WeaponConfig[] = [
     tracer: false,
     soundProfile: 'shotgun',
     model: { barrelLen: 0.3, barrelRadius: 0.022, receiverLen: 0.26, magH: 0.05, scope: false, pump: true },
+    viewModel: {
+      file: 'shotgun',
+      scale: 0.13,
+      position: [0, 0.01, -0.24],
+      rotation: [0.38, -Math.PI / 2, 0],
+      muzzleLocal: [-0.95, 0.05, 0],
+    },
   },
   {
     id: 'sniper',
@@ -133,5 +162,12 @@ export const WEAPONS: readonly WeaponConfig[] = [
     tracer: true,
     soundProfile: 'sniper',
     model: { barrelLen: 0.42, barrelRadius: 0.012, receiverLen: 0.34, magH: 0.07, scope: true, pump: false },
+    viewModel: {
+      file: 'sniper',
+      scale: 0.17,
+      position: [0, -0.02, -0.22],
+      rotation: [0, -Math.PI / 2, 0],
+      muzzleLocal: [-0.95, -0.03, 0],
+    },
   },
 ];
