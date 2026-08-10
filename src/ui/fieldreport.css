@@ -1,0 +1,263 @@
+/* FIELD REPORT — zero-backend feedback modal. Overlay + centered panel in
+   brand chrome; only ever shown while the pointer is free (menu footer or
+   the K.I.A. screen — see FieldReport.ts's show()). */
+.fr-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above #boot-screen (100) and every HUD/menu layer, regardless of when
+     this module's DOM gets built relative to Menu/Hud. */
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s2);
+  background: rgba(6, 7, 4, 0.72);
+  backdrop-filter: blur(var(--panel-blur));
+  transition: opacity var(--t-med) var(--ease-out);
+  pointer-events: auto;
+}
+
+.fr-overlay.fr-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: min(92vw, 460px);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: var(--s3);
+  background: linear-gradient(180deg, rgba(11, 13, 9, 0.86), rgba(11, 13, 9, 0.94));
+  backdrop-filter: blur(calc(var(--panel-blur) * 2));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.fr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fr-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--c-text);
+}
+
+.fr-title svg {
+  width: 20px;
+  height: 20px;
+  color: var(--c-accent);
+  flex-shrink: 0;
+}
+
+.fr-close {
+  display: flex;
+  padding: var(--s05);
+  background: none;
+  border: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.fr-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.fr-close:hover {
+  color: var(--c-accent);
+}
+
+/* Category: macOS-style segmented control — same recipe as .menu-seg /
+   .seg-chip (raised active pill, no outlined-box style). Full-width here
+   since the modal is a flex column, not Menu's settings grid. */
+.fr-seg {
+  display: flex;
+  gap: var(--s05);
+  padding: var(--s05);
+  background: var(--c-surface-2);
+  border-radius: 999px;
+}
+
+.fr-chip {
+  flex: 1;
+  padding: var(--s1) var(--s1);
+  font-family: var(--font-hud);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  color: var(--c-muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.fr-chip:hover {
+  color: var(--c-text);
+}
+
+.fr-chip.fr-chip-active {
+  color: var(--c-text);
+  background: var(--c-bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark-input recipe: surface-2 fill, amber border 15% rest / 25% hover,
+   1.5px solid amber + halo on focus, muted placeholder. */
+.fr-textarea {
+  resize: vertical;
+  min-height: 84px;
+  max-height: 240px;
+  padding: var(--s1) var(--s2);
+  font-family: var(--font-hud);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--c-text);
+  background: var(--c-surface-2);
+  border: 1px solid rgba(255, 176, 46, 0.15);
+  border-radius: var(--radius);
+  outline: none;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+
+.fr-textarea:hover {
+  border-color: rgba(255, 176, 46, 0.25);
+}
+
+.fr-textarea:focus {
+  border: 1.5px solid var(--c-accent);
+  box-shadow: 0 0 0 3px rgba(255, 176, 46, 0.15);
+}
+
+.fr-textarea::placeholder {
+  color: var(--c-muted);
+}
+
+.fr-intel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s05);
+  padding: var(--s1) var(--s2);
+  background: var(--c-surface-2);
+  border: var(--panel-border);
+  border-radius: var(--radius);
+}
+
+.fr-intel-title {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.16em;
+  color: var(--c-muted);
+}
+
+.fr-intel-body {
+  font-family: var(--font-hud);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--c-muted);
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.fr-actions {
+  display: flex;
+  gap: var(--s1);
+}
+
+.fr-btn {
+  flex: 1;
+  padding: var(--s1) var(--s2);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    filter var(--t-fast) var(--ease-out),
+    opacity var(--t-fast) var(--ease-out);
+}
+
+/* Primary: mirrors .menu-btn's amber-fill DEPLOY pattern at modal scale. */
+.fr-btn-primary {
+  color: var(--c-bg);
+  background: var(--c-accent);
+  border: none;
+}
+
+.fr-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+/* Ghost: transparent fill, amber outline — the modal's one bordered
+   button, reserved for the secondary action (no-GitHub-account fallback). */
+.fr-btn-ghost {
+  color: var(--c-accent);
+  background: transparent;
+  border: 1px solid rgba(255, 176, 46, 0.35);
+}
+
+.fr-btn-ghost:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  background: rgba(255, 176, 46, 0.08);
+}
+
+.fr-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+  filter: saturate(0.4);
+  transform: none;
+}
+
+.fr-note {
+  /* Deliberate one-off below --fs-xs (the scale's floor) — fine print that
+     must read quieter than any regular UI text, same rationale as the menu
+     footer row (see menu.css). */
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+.fr-confirm {
+  /* Reserve the line height so the confirmation appearing never shifts the
+     panel/buttons above it. */
+  min-height: 1em;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-accent);
+  opacity: 0;
+}
+
+.fr-confirm.fr-confirm-err {
+  color: var(--c-danger);
+}
+
+.fr-confirm.fr-confirm-play {
+  animation: fr-confirm-fade var(--t-slow) var(--ease-out) forwards;
+}
+
+@keyframes fr-confirm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -228,6 +228,44 @@
   margin-top: var(--s1);
 }
 
+/* Utility row: field report + legal/source links. wrap so a very narrow
+   viewport reflows instead of overflowing the card (never widens it —
+   the settings block above still sets .menu-card's width floor). */
+.menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s05);
+  margin-top: var(--s05);
+  font-family: var(--font-hud);
+  /* Deliberate one-off below --fs-xs (the type scale's floor) — this row
+     must read quieter than .menu-hint above it, which already sits on the
+     smallest scale step. Same exception class as .death-title's 72px
+     (hud.css): a single named departure from the token scale, commented. */
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.menu-footer-link {
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--c-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.menu-footer-link:hover {
+  color: var(--c-accent);
+}
+
+.menu-footer-sep {
+  color: rgba(143, 148, 124, 0.6); /* --c-muted at 60% */
+}
+
 /* Narrow viewports: trim the card padding and let the logo shrink further
    than the 40vw rule would alone. The quality segmented control (6 chips)
    needs ~430px to render without spilling past the card's edge — that's

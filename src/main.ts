@@ -20,6 +20,7 @@ import { WeaponPickups } from './gameplay/WeaponPickups';
 import { Upgrades } from './gameplay/Upgrades';
 import { Hud } from './ui/Hud';
 import { Menu } from './ui/Menu';
+import { configure as configureFieldReport } from './ui/FieldReport';
 import { SoundBus } from './audio/SoundBus';
 import { buildGreyBoxRoom } from './levels/GreyBoxRoom';
 import { StatsOverlay } from './debug/StatsOverlay';
@@ -92,6 +93,16 @@ async function boot(): Promise<void> {
   const weaponPickups = new WeaponPickups(renderSys.scene);
   postfx.addBloomMeshes(weaponPickups.bloomMeshes); // arsenal/station rings
   const hud = new Hud();
+  // Diagnostics for the FIELD REPORT widget (src/ui/FieldReport.ts) — every
+  // field here is already cheaply readable off state/quality, so nothing
+  // new is plumbed through GameState for this.
+  configureFieldReport(() => ({
+    version: 'v0.1.0',
+    wave: String(state.score.wave),
+    quality: state.quality.auto ? `AUTO (${quality.tierName()})` : quality.tierName(),
+    ua: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+  }));
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
   // Best score survives sessions.

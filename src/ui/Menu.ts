@@ -1,6 +1,9 @@
 import type { GameState, QualityTier } from '../core/GameState';
 import type { QualityControl } from '../core/Capabilities';
 import { preloadCritical } from '../core/Assets';
+import { openFieldReport } from './FieldReport';
+
+const REPO_URL = 'https://github.com/tangkwok0104/cat-of-duty';
 
 export interface MenuCallbacks {
   /** Request pointer lock (deploy/resume). */
@@ -73,8 +76,20 @@ export class Menu {
             </label>
           </div>
           <div class="menu-hint">WASD MOVE · SHIFT SPRINT · CTRL CROUCH · SPACE JUMP · 1-4 GUNS · R RELOAD</div>
+          <div class="menu-footer">
+            <button type="button" class="menu-footer-link" id="footer-fieldreport">FIELD REPORT</button>
+            <span class="menu-footer-sep" aria-hidden="true">·</span>
+            <a class="menu-footer-link" href="/privacy.html" target="_blank" rel="noopener">PRIVACY</a>
+            <span class="menu-footer-sep" aria-hidden="true">·</span>
+            <a class="menu-footer-link" href="/terms.html" target="_blank" rel="noopener">TERMS</a>
+            <span class="menu-footer-sep" aria-hidden="true">·</span>
+            <a class="menu-footer-link" href="${REPO_URL}" target="_blank" rel="noopener">SOURCE</a>
+          </div>
         </div>
       </div>`;
+
+    const fieldReportBtn = this.root.querySelector('#footer-fieldreport');
+    fieldReportBtn?.addEventListener('click', () => openFieldReport());
 
     const deployBtn = this.root.querySelector('#menu-deploy') as HTMLButtonElement | null;
     deployBtn?.addEventListener('click', () => {

@@ -23,7 +23,10 @@ North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 **State:** live at https://cat-of-duty.vercel.app · **public source at
 https://github.com/tangkwok0104/cat-of-duty** · branch `m0-scaffold` = `main`
 · working tree clean · all gates green (tsc ×2, build, loop-integrity 14/14
-×6, perf 120fps / ~9ms p95 / 145 draws).
+×3 serialized, perf p95 9.4ms / 113 draws / tris 196.9k / heap Δ0 orbit).
+Wave 9 (2026-08-10) added the public-product layer: FIELD REPORT feedback
+widget, privacy/terms pages, CSP + security headers, corner dressing, and a
+harness placement class-fix.
 
 **Publishing setup (2026-08-10):** history rewritten with `git-filter-repo` to
 strip superseded >3MB model blobs — all 26 commits kept, push payload 14MB
@@ -42,7 +45,7 @@ push `main`; only `main` exists on GitHub.
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
 | 1 | **Multiplayer** (he raised it) | A) leaderboard only (~days) · B) 2-player co-op, WebRTC (~weeks, real project) · C) park it | **A first** — most of the "others exist" feeling for a fraction of the cost |
-| 2 | **Feedback widget + privacy/terms pages** | add / skip | **Add lightweight** — the 67Lab finalize harness fails without them, and stranger bug reports are worth having |
+| 2 | ~~Feedback widget + privacy/terms pages~~ | ✅ **BUILT (wave 9)** per the standing recommendation | Zero-backend: FIELD REPORT → prefilled public GitHub issue (+ copy fallback). If Anson wants an in-page submit instead, that needs a webhook/DB he provisions — say the word |
 | 3 | **TUNA economy balance** | keep / tune after his playtest / remove | **Tune after playtest** — needs his hands on it, not more agent guessing |
 | 4 | **Polish debt** | queue next session / leave | Leave unless he asks — see Deferred |
 
@@ -51,11 +54,16 @@ push `main`; only `main` exists on GitHub.
 - **Sound mix on headphones** — footstep prominence, headshot tick clarity over SMG fire, overall levels. Every gain value is a first-pass guess.
 - **Feel check** — viewmodel sway, sprint FOV kick (QA CONCERN: a +3.5° kick can't be proven from static frames), cat run-cycle.
 - **Economy pacing** — one run to wave 6-7 answers decision #3.
+- **Field Report end-to-end with a real cursor + GitHub account** — agent QA
+  verified the composed URL and clipboard payload, but nobody has clicked
+  SEND through to a filed issue. Also eyeball /privacy.html + /terms.html.
 
 ### 3. DEFERRED (real, unblocked, nobody's building it)
 
-- Outer-ring arena corners are bare floor (~8-10m of nothing from a corner).
 - KTX2/Basis texture pipeline — 4-8× VRAM win, `KTX2Loader` unwired (`.tmp/research-aaa-feel.md` §5).
+- Raster hygiene: menu keyart/poster PNGs → WebP (finalize harness advisory,
+  not a failure). In-page feedback backend (webhook/DB) if GitHub-only proves
+  too much friction for strangers.
 - Ragdolls, reload animation on the gun, pathfinding proper (steering is heuristic — good enough, see wave 8).
 - Iris Xe / low-end hardware never measured; all numbers are from the M5 Pro.
 - Special waves exist but every enemy is still a cat re-skin — research says a
@@ -75,6 +83,55 @@ push `main`; only `main` exists on GitHub.
 - Deploy: `vercel --prod --yes` from the project root, then verify 200 + screenshot.
 
 ---
+
+## Wave 9 (2026-08-10) — the public-product pass (autopilot hour)
+
+**Field Report feedback widget** (`src/ui/FieldReport.ts`, zero backend):
+menu-footer FIELD REPORT · PRIVACY · TERMS · SOURCE row + K.I.A. "F — FIELD
+REPORT" (pointer stays locked on death — traced, so F releases + opens).
+BUG/IDEA/OTHER segmented, 1000-char message, ATTACHED INTEL transparency
+block (version/wave/quality/UA/viewport), SEND VIA GITHUB = prefilled public
+issue (verified 591-char URL), COPY REPORT fallback. Builder's own QA caught
+two real bugs pre-merge: an invisible clickable hotspot over the crosshair
+(pointer-events inheritance) and F typing "f" into the textarea (missing
+preventDefault).
+
+**Legal pages** (`public/privacy.html`, `public/terms.html`): standalone,
+token-matched, claims verified against code (exactly 2 localStorage keys,
+zero transmission, no cookies/analytics; Vercel host-log disclosure; GitHub
+publicity warning; PolyForm NC + assets licensing; photosensitivity notice).
+
+**Security headers** (`vercel.json`, new): CSP + X-Frame-Options DENY +
+nosniff. CSP derived EMPIRICALLY — `.tmp/csp-smoke.mjs` replays the exact
+headers against dist; first pass caught `connect-src 'self'` breaking engine
+blob: fetches BEFORE prod ever saw it. Post-fix: full gameplay, 0 violations.
+
+**Corner dressing** (`GreyBoxRoom.ts`): 11 crates + 1 pillar across 4
+distinct corner arrangements, all via existing instanced pools — draw calls
+byte-identical 113→113 (stash A/B). Envelope ≤16.2 (spawn corridor ≥1.2m),
+inter-geometry gaps ≥2.72m (no new steering pockets).
+
+**Harness placement class-fix** (`loop-integrity.ts`). Corner geometry
+exposed a latent defect: `aimAtCat`'s null was DISCARDED at the shotgun step
+(loop-integrity.ts:211) — all 2.2m bearings around a corner-frozen cat
+blocked → player never teleported → blast fired from a stale position →
+kills 0→0 with ammo spent (2/5 runs, both SW-correlated). Fix: all-cats
+bearing search + `aimWithApproach` (unfreeze 1.2s so cats walk clear,
+refreeze, retry ×4) + null placement now FAILS LOUDLY with target coords —
+aimed steps can never fire blind again. Validated 14/14 ×3 consecutive
+serialized, shotgun targets landing in the previously-failing SW zone every
+run. Extra lesson banked (memory #15): a finalize pytest sweep running
+beside run 3 produced an 8/14 boot-sick cascade — NOTHING runs beside the
+loop suite.
+
+**Compliance**: `.agent-config.md` created (roles/skills/harness-of-record);
+finalize harness 4 fails → 2, both expected (legal-page check only greps
+framework source extensions, can't see .html — documented, not gamed).
+
+Gates: tsc ×2 clean, build green, loop 14/14 ×3 serialized 0 console errors,
+perf p95 9.4ms / p99 10.2 / draws 113 / tris 196.9k / heap Δ0 — all budgets
+pass. CSP smoke clean. Visual QA eyeballed: menu footer, modal, K.I.A. hint,
+4 corners, both legal pages.
 
 ## SHIPPED (2026-08-10) — https://cat-of-duty.vercel.app
 

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy — Cat of Duty</title>
+  <meta name="description" content="Privacy policy for Cat of Duty. The game collects no personal data: no accounts, no cookies, no analytics. Settings and best score stay in your browser." />
+  <!-- Standalone page: public/ files are served verbatim, so tokens.css is not
+       reachable here. Values below mirror src/ui/tokens.css — keep in sync. -->
+  <style>
+    :root {
+      --c-bg: #0b0d09; --c-surface: #131610; --c-surface-2: #1b1f16;
+      --c-text: #e9e6d7; --c-muted: #8f947c; --c-subtle: #4a4f3e;
+      --c-accent: #ffb02e; --c-accent-dim: rgba(255, 176, 46, 0.15);
+      --font-hud: 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
+      --font-display: 'Avenir Next Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--c-bg); color: var(--c-text);
+      font: 16px/1.65 'Helvetica Neue', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 64px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 48px;
+    }
+    .mark { display: flex; align-items: center; gap: 12px; color: var(--c-accent); }
+    .mark svg { width: 34px; height: 34px; }
+    .mark-name {
+      font-family: var(--font-display); font-size: 19px; letter-spacing: 0.3em;
+      color: var(--c-text);
+    }
+    a { color: var(--c-accent); text-decoration: none; font-weight: 600; transition: color 120ms; }
+    a:hover { color: var(--c-text); }
+    .back { font-family: var(--font-hud); font-size: 13px; letter-spacing: 0.12em; }
+    .kicker {
+      font-family: var(--font-hud); font-size: 11px; letter-spacing: 0.3em;
+      color: var(--c-muted); text-transform: uppercase; margin-bottom: 8px;
+    }
+    h1 {
+      font-family: var(--font-display); font-size: 40px; letter-spacing: 0.15em;
+      text-transform: uppercase; line-height: 1.1; margin-bottom: 8px;
+    }
+    .updated { font-family: var(--font-hud); font-size: 13px; color: var(--c-muted); margin-bottom: 40px; }
+    .card {
+      background: var(--c-surface); border: 1px solid var(--c-accent-dim);
+      border-radius: 3px; padding: 24px; margin-bottom: 16px;
+    }
+    h2 {
+      font-family: var(--font-display); font-size: 19px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--c-accent); margin-bottom: 12px;
+    }
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul { margin: 0 0 12px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: var(--font-hud); font-size: 13px; background: var(--c-surface-2);
+      border: 1px solid var(--c-accent-dim); border-radius: 3px; padding: 1px 6px;
+    }
+    .footer {
+      margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--c-accent-dim);
+      font-family: var(--font-hud); font-size: 12px; letter-spacing: 0.1em;
+      color: var(--c-muted); display: flex; gap: 16px; flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="mark">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M10 34 L10 16 L16 22 L24 12 L32 22 L38 16 L38 34 Z"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
+          <circle cx="19" cy="27" r="1.8" fill="currentColor" />
+          <circle cx="29" cy="27" r="1.8" fill="currentColor" />
+        </svg>
+        <span class="mark-name">CAT OF DUTY</span>
+      </div>
+      <a class="back" href="/">◂ RETURN TO GAME</a>
+    </div>
+
+    <div class="kicker">Field Manual — Section P</div>
+    <h1>Privacy Policy</h1>
+    <div class="updated">LAST UPDATED: 2026-08-10 · V1.0</div>
+
+    <div class="card">
+      <h2>The Short Version</h2>
+      <p>Cat of Duty is a free browser game with no accounts, no sign-up, no ads,
+      no analytics, and no tracking. The game itself collects no personal data
+      and sends nothing you do in it anywhere. Your settings and best score are
+      stored only in your own browser.</p>
+    </div>
+
+    <div class="card">
+      <h2>What the Game Stores</h2>
+      <p>The game keeps exactly two pieces of data, both in your browser's
+      <code>localStorage</code>, both only on your device:</p>
+      <ul>
+        <li><code>cod-settings</code> — your mouse sensitivity, field of view,
+        quality tier, and volume choices.</li>
+        <li><code>cod-best</code> — your best score.</li>
+      </ul>
+      <p>Neither is transmitted to us or anyone else. There are no cookies, no
+      tracking pixels, no analytics scripts, and no third-party embeds. Because
+      this storage is strictly functional (it exists so your settings survive a
+      reload), no consent banner is required — and we don't show one.</p>
+    </div>
+
+    <div class="card">
+      <h2>Hosting</h2>
+      <p>The game's files are served by <a href="https://vercel.com" rel="noopener">Vercel</a>.
+      Like any web host, Vercel processes standard technical request data (such
+      as your IP address and browser user agent) to deliver the site and keep it
+      secure. That processing is governed by
+      <a href="https://vercel.com/legal/privacy-policy" rel="noopener">Vercel's privacy policy</a>.
+      We do not receive, store, or analyze that data ourselves.</p>
+    </div>
+
+    <div class="card">
+      <h2>Field Reports (Feedback)</h2>
+      <p>The optional FIELD REPORT button composes a bug report and hands it to
+      <a href="https://github.com/tangkwok0104/cat-of-duty/issues" rel="noopener">GitHub Issues</a>
+      in a new tab. Nothing is sent until you submit it there yourself, and
+      anything you submit becomes a <strong>public</strong> GitHub issue under
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>.
+      The report includes technical details shown to you before you send it
+      (game version, wave reached, quality tier, browser user agent, viewport
+      size) — review and edit freely before submitting.</p>
+    </div>
+
+    <div class="card">
+      <h2>Your Rights &amp; Deleting Your Data</h2>
+      <p>Because your data never leaves your browser, you are already in full
+      control of it. To delete everything the game stores, clear this site's
+      data in your browser settings (or clear <code>localStorage</code> for
+      this site). There is nothing on our side to request, export, or erase —
+      under GDPR, CCPA, or any similar framework, we simply hold no personal
+      data about you.</p>
+    </div>
+
+    <div class="card">
+      <h2>Changes &amp; Contact</h2>
+      <p>If the game ever starts collecting anything new (for example, an online
+      leaderboard), this policy will be updated first and the "Last Updated"
+      date above will change. Questions or concerns: open an issue on
+      <a href="https://github.com/tangkwok0104/cat-of-duty/issues" rel="noopener">GitHub</a>.</p>
+    </div>
+
+    <div class="footer">
+      <a href="/">GAME</a>
+      <a href="/terms.html">TERMS</a>
+      <a href="https://github.com/tangkwok0104/cat-of-duty" rel="noopener">SOURCE</a>
+    </div>
+  </div>
+</body>
+</html>

@@ -42,30 +42,51 @@ async function main(): Promise<void> {
   };
 
   /** Place the shooter `dist` metres from a live cat with VERIFIED clear
-   *  line of sight (real physics ray) — walks bearings around the cat until
-   *  one isn't blocked by pillars/crates/walls. Returns the cat id. */
-  const aimAtCat = (dist: number, aimY: number): Promise<number | null> =>
+   *  line of sight (real physics ray) — walks bearings around EVERY alive cat
+   *  until one isn't blocked by pillars/crates/walls. Returns the placed
+   *  target's id+position, or null if no cat has a clear bearing (possible
+   *  since the wave-9 corner clusters: a ring-fresh cat frozen beside corner
+   *  cover can have all close-range bearings blocked or out of bounds). */
+  const aimAtCat = (dist: number, aimY: number): Promise<{ id: number; x: number; z: number } | null> =>
     page.evaluate(
       ([d, ay]) => {
         const g = window.__cod.getGame();
-        const cat = g.cats.find((c) => c.phase === 'alive');
-        if (!cat) return null;
         const OFFSETS = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, Math.PI / 2, -Math.PI / 2, Math.PI];
-        for (const off of OFFSETS) {
-          const ang = Math.atan2(-cat.x, -cat.z) + off;
-          const px = cat.x + Math.sin(ang) * d!;
-          const pz = cat.z + Math.cos(ang) * d!;
-          if (Math.abs(px) > 18 || Math.abs(pz) > 18) continue;
-          if (!window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ay!)) continue;
-          const yaw = Math.atan2(-(cat.x - px), -(cat.z - pz));
-          const pitch = Math.atan2(ay! - 1.62, d!);
-          window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
-          return cat.id;
+        for (const cat of g.cats) {
+          if (cat.phase !== 'alive') continue;
+          for (const off of OFFSETS) {
+            const ang = Math.atan2(-cat.x, -cat.z) + off;
+            const px = cat.x + Math.sin(ang) * d!;
+            const pz = cat.z + Math.cos(ang) * d!;
+            if (Math.abs(px) > 18 || Math.abs(pz) > 18) continue;
+            if (!window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ay!)) continue;
+            const yaw = Math.atan2(-(cat.x - px), -(cat.z - pz));
+            const pitch = Math.atan2(ay! - 1.62, d!);
+            window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
+            return { id: cat.id, x: cat.x, z: cat.z };
+          }
         }
         return null;
       },
       [dist, aimY],
     );
+
+  /** aimAtCat, but when no cat is placeable, unfreeze briefly so the cats
+   *  walk toward the player — out of whatever corner clutter pinned the
+   *  search — then refreeze and retry. Placement failure after that is
+   *  returned as null for the caller to FAIL LOUDLY; steps must never fire
+   *  from a stale position (the wave-9 shotgun flake: aimAtCat's null was
+   *  discarded and the blast went somewhere irrelevant). */
+  const aimWithApproach = async (dist: number, aimY: number): Promise<{ id: number; x: number; z: number } | null> => {
+    for (let tries = 0; tries < 4; tries++) {
+      const aimed = await aimAtCat(dist, aimY);
+      if (aimed) return aimed;
+      await page.evaluate(() => window.__cod.setCatsFrozen(false));
+      await page.waitForTimeout(1200);
+      await page.evaluate(() => window.__cod.setCatsFrozen(true));
+    }
+    return aimAtCat(dist, aimY);
+  };
 
   // 1. Lock pointer (arms the waves).
   await page.mouse.click(960, 540);
@@ -117,13 +138,15 @@ async function main(): Promise<void> {
     step('kill a cat', false, 'no live cat to shoot');
   } else {
     const killsBefore = g.kills;
-    const aimed = await aimAtCat(5, 0.44); // torso, LoS-verified spot
-    step('LoS-verified firing position found', aimed !== null, `catId=${aimed}`);
-    await page.waitForTimeout(200);
-    await page.mouse.down();
-    // 100 dmg body needs 3 shots @34; hold long enough for a mag-third.
-    await page.waitForTimeout(900);
-    await page.mouse.up();
+    const aimed = await aimWithApproach(5, 0.44); // torso, LoS-verified spot
+    step('LoS-verified firing position found', aimed !== null, `catId=${aimed?.id}`);
+    if (aimed) {
+      await page.waitForTimeout(200);
+      await page.mouse.down();
+      // 100 dmg body needs 3 shots @34; hold long enough for a mag-third.
+      await page.waitForTimeout(900);
+      await page.mouse.up();
+    }
     g = await game();
     step('kill a cat (hitscan + hp + kill count)', g.kills > killsBefore, `kills ${killsBefore}→${g.kills}`);
   }
@@ -208,14 +231,20 @@ async function main(): Promise<void> {
     step('shotgun close-range one-pull kill', false, 'no live cat');
   } else {
     const kills0 = g.kills;
-    await aimAtCat(2.2, 0.44);
-    await page.waitForTimeout(200);
-    await page.mouse.down();
-    await page.waitForTimeout(120);
-    await page.mouse.up();
-    await page.waitForTimeout(200);
-    g = await game();
-    step('shotgun close-range one-pull kill', g.kills > kills0, `kills ${kills0}→${g.kills}, ammo=${g.ammo}`);
+    const aimed = await aimWithApproach(2.2, 0.44);
+    if (!aimed) {
+      // Never fire from a stale position — attribute the placement failure.
+      step('shotgun close-range one-pull kill', false, 'placement failed: no clear 2.2m bearing to any cat');
+    } else {
+      await page.waitForTimeout(200);
+      await page.mouse.down();
+      await page.waitForTimeout(120);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+      g = await game();
+      step('shotgun close-range one-pull kill', g.kills > kills0,
+        `kills ${kills0}→${g.kills}, ammo=${g.ammo}, target=(${aimed.x.toFixed(1)},${aimed.z.toFixed(1)})`);
+    }
   }
 
   // 13. Sniper headshot one-shots a cat (105×2 through the skull).
@@ -234,18 +263,22 @@ async function main(): Promise<void> {
     step('sniper ADS headshot one-shot', false, 'no live cat');
   } else {
     const kills0 = g.kills;
-    await aimAtCat(7, 0.95); // head ball, LoS-verified spot
-    await page.waitForTimeout(150);
-    await page.mouse.down({ button: 'right' }); // ADS
-    await page.waitForTimeout(350);
-    await page.mouse.down();
-    await page.waitForTimeout(80);
-    await page.mouse.up();
-    await page.mouse.up({ button: 'right' });
-    await page.waitForTimeout(200);
-    g = await game();
-    step('sniper ADS headshot one-shot', sniperArmed && g.kills > kills0,
-      `armed=${sniperArmed} kills ${kills0}→${g.kills} ammo=${g.ammo} target=(${target.x.toFixed(1)},${target.z.toFixed(1)})`);
+    const aimed = await aimWithApproach(7, 0.95); // head ball, LoS-verified spot
+    if (!aimed) {
+      step('sniper ADS headshot one-shot', false, 'placement failed: no clear 7m bearing to any cat');
+    } else {
+      await page.waitForTimeout(150);
+      await page.mouse.down({ button: 'right' }); // ADS
+      await page.waitForTimeout(350);
+      await page.mouse.down();
+      await page.waitForTimeout(80);
+      await page.mouse.up();
+      await page.mouse.up({ button: 'right' });
+      await page.waitForTimeout(200);
+      g = await game();
+      step('sniper ADS headshot one-shot', sniperArmed && g.kills > kills0,
+        `armed=${sniperArmed} kills ${kills0}→${g.kills} ammo=${g.ammo} target=(${aimed.x.toFixed(1)},${aimed.z.toFixed(1)})`);
+    }
   }
   await page.evaluate(() => window.__cod.setCatsFrozen(false));
 

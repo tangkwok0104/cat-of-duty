@@ -812,3 +812,32 @@
   color: var(--c-text);
   animation: reload-blink 900ms ease-in-out infinite alternate;
 }
+
+/* Secondary hint under the redeploy prompt: no blink (the blink reads as
+   "the one urgent action"), muted at rest, clickable + amber on hover for
+   the rare case the cursor is already free (see Hud.ts's isDead keydown
+   listener — F is the primary path since pointer lock survives death).
+   #hud-root is pointer-events:none (everything else on the death screen
+   is keyboard-only, e.g. "PRESS R"), so this one interactive element has
+   to opt back in explicitly or it's inert to the mouse despite looking
+   clickable. */
+.death-sub-secondary {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+/* Scoped to :not(.hidden-death) — a plain pointer-events:auto on the chip
+   itself would win over the parent's pointer-events:none even while
+   hidden (a child's explicit value always beats inherited), leaving an
+   invisible clickable hotspot sitting dead center over the crosshair
+   during normal gameplay. This keeps it live only while actually shown. */
+.death-screen:not(.hidden-death) .death-sub-secondary {
+  pointer-events: auto;
+}
+
+.death-sub-secondary:hover {
+  color: var(--c-accent);
+}

@@ -3,6 +3,7 @@ import { bus } from '../core/EventBus';
 import { ARCHETYPES } from '../enemies/EnemyConfig';
 import { WEAPONS } from '../weapons/WeaponConfig';
 import { effectiveMaxHp } from '../player/Health';
+import { openFieldReport } from './FieldReport';
 
 const REFRESH_MS = 100;
 // Minimap world→pixel: half-extent of the play area plus a small margin so
@@ -59,6 +60,10 @@ export class Hud {
   // throttled refresh — no setInterval, no per-tick event spam.
   private breatherDeadline = 0;
   private breatherWave = 0;
+  // Tracked locally (not read from GameState) so the K.I.A. field-report
+  // hotkey below doesn't need a state reference — Hud only ever learns
+  // about death via the player:died/game:restart bus events.
+  private isDead = false;
 
   constructor() {
     const root = document.getElementById('hud-root');
@@ -101,6 +106,20 @@ export class Hud {
     // throttled frame() block — same idiom as the arsenal pips above.
     bus.on('upgrade:purchased', ({ id }) => this.flashPromoChip(id));
     bus.on('upgrade:denied', ({ id }) => this.denyPromoChip(id));
+
+    // K.I.A. field-report access point. Nothing releases pointer lock on
+    // death (see Input.ts — only ESC or the browser does), so the cursor
+    // is normally still captured on this screen; F is the only way in.
+    // openFieldReport() itself calls exitPointerLock(), so this stays
+    // correct even in the rare case the player already hit ESC first.
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'KeyF' || !this.isDead) return;
+      // Without this, the browser's default action still fires after our
+      // handler moves focus to the modal's textarea (same synchronous
+      // event) — the F itself lands as the report's first typed character.
+      e.preventDefault();
+      openFieldReport();
+    });
   }
 
   private build(): void {
@@ -295,11 +314,15 @@ export class Hud {
       '<div class="ds-row"><span>WAVE REACHED</span><span id="ds-wave">0</span></div>' +
       '<div class="ds-row"><span>ACCURACY</span><span id="ds-acc">0%</span></div>' +
       '</div>' +
-      '<div class="death-sub">PRESS R TO REDEPLOY</div>';
+      '<div class="death-sub">PRESS R TO REDEPLOY</div>' +
+      '<div class="death-sub death-sub-secondary" id="death-fieldreport">F — FIELD REPORT</div>';
     for (const id of ['ds-score', 'ds-best', 'ds-kills', 'ds-wave', 'ds-acc']) {
       const el = death.querySelector(`#${id}`);
       if (el instanceof HTMLElement) this.els[id] = el;
     }
+    // Also clickable (covers the rare case the player already tapped ESC
+    // to free the cursor before reading the F hint).
+    death.querySelector('#death-fieldreport')?.addEventListener('click', () => openFieldReport());
   }
 
   /** Fill the death card the moment the run ends. */
@@ -459,6 +482,7 @@ export class Hud {
   }
 
   private setDead(dead: boolean): void {
+    this.isDead = dead;
     this.els['death-screen']?.classList.toggle('hidden-death', !dead);
   }
 

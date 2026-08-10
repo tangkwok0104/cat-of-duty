@@ -140,6 +140,7 @@ export function buildGreyBoxRoom(
   const outerPillarPos: [number, number][] = [
     [14.5, 2.5],
     [-14.7, -2.2],
+    [14.5, 14.5], // SE corner dressing (wave 9) — see staticDefs comment below
   ];
   const outerPillars = new InstancedMesh(pillarGeo, wallMat, outerPillarPos.length);
   outerPillarPos.forEach(([x, z], i) => {
@@ -188,6 +189,37 @@ export function buildGreyBoxRoom(
     { x: -2.5, y: CRATE_HALF, z: 14.3, rotY: -0.2 },
     { x: -3.5, y: CRATE_HALF, z: 14.15, rotY: 0.25 },
     { x: -3.0, y: CRATE_HALF * 3 + STACK_LIFT, z: 14.25, rotY: -0.4 },
+    // ---- Corner dressing (wave 9): the four outer-ring corners were bare
+    // floor after the 26m->38m expansion (~8-10 m of nothing diagonally).
+    // Each corner gets ONE compact, mutually-touching crate blob so cats
+    // can't flank through open dead space and the ring reads intentional.
+    // Every collider stays >=2.7 m inside the 19 m walls (max-norm <=16.2)
+    // and >=2.5 m clear of the nearest pre-existing prop per corner —
+    // verified numerically in .tmp/wave9-geometry-check.ts (an OBB min-
+    // distance probe, not eyeballed) so no piece creates a 0.5-2.4 m
+    // wedge gap of the kind that caused earlier cat-pathing pin incidents.
+    // NE: 2-stack + a touching single — closes the pocket beside the
+    // platform quadrant without blocking the platform's own sightlines.
+    { x: 14.3, y: CRATE_HALF, z: -14.6, rotY: 0.2 },
+    { x: 14.3, y: CRATE_HALF * 3 + STACK_LIFT, z: -14.6, rotY: -0.35 },
+    { x: 15.15, y: CRATE_HALF, z: -14.45, rotY: 0.5 },
+    // NW: tight 3-crate triangle (reads as a bent "L") — every pair
+    // mutually overlaps, so there's no hollow notch a cat could be routed
+    // into and wedged against; the corner is a solid blob, not a pocket.
+    { x: -14.4, y: CRATE_HALF, z: -15.0, rotY: -0.15 },
+    { x: -15.25, y: CRATE_HALF, z: -14.85, rotY: 0.25 },
+    { x: -14.85, y: CRATE_HALF, z: -15.25, rotY: -0.4 },
+    // SE: touching crate pair braced against the new outer pillar
+    // (outerPillarPos below) — a thin vertical accent, not a wide wall,
+    // so the corner stays partially visible from the arena centre.
+    { x: 15.35, y: CRATE_HALF, z: 14.35, rotY: 0.3 },
+    { x: 14.95, y: CRATE_HALF, z: 15.25, rotY: -0.35 },
+    // SW: staggered "broken" row of 3, each crate touching the next —
+    // breaks the one clean diagonal sightline this corner left wide open
+    // across the whole arena.
+    { x: -14.3, y: CRATE_HALF, z: 14.6, rotY: 0.4 },
+    { x: -15.15, y: CRATE_HALF, z: 14.75, rotY: -0.2 },
+    { x: -14.85, y: CRATE_HALF, z: 15.35, rotY: 0.15 },
   ];
   const staticCrates = new InstancedMesh(crateGeo, crateMat, staticDefs.length);
   staticDefs.forEach((d, i) => {
