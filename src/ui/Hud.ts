@@ -5,6 +5,7 @@ import { WEAPONS } from '../weapons/WeaponConfig';
 import { effectiveMaxHp } from '../player/Health';
 import { openFieldReport } from './FieldReport';
 import { submitScore, type LeaderboardRunStats } from '../net/Leaderboard';
+import type { PartnerStatus } from '../net/Rooms';
 
 const REFRESH_MS = 100;
 // Minimap world→pixel: half-extent of the play area plus a small margin so
@@ -263,10 +264,16 @@ export class Hud {
     wave.className = 'score-wave';
     const tuna = document.createElement('div');
     tuna.className = 'score-tuna';
-    score.append(kills, wave, tuna);
+    // Friend-room co-op status (M9 P2) — hidden until main.ts hands off a
+    // launched RoomHandle (see setPartner below); styled in friendpanel.css
+    // (this build's file scope covers that file, not hud.css).
+    const partner = document.createElement('div');
+    partner.className = 'score-partner partner-hidden';
+    score.append(kills, wave, tuna, partner);
     this.els['score-kills'] = kills;
     this.els['score-wave'] = wave;
     this.els['score-tuna'] = tuna;
+    this.els['score-partner'] = partner;
 
     make('wave-toast', 'wave-toast', this.root);
     make('acquire-toast', 'acquire-toast', this.root);
@@ -529,6 +536,33 @@ export class Hud {
     set('ds-kills', String(kills));
     set('ds-wave', String(wave));
     set('ds-acc', shots > 0 ? `${Math.round((hits / shots) * 100)}%` : '—');
+  }
+
+  /** Friend-room co-op status chip (M9 P2). Called from main.ts whenever the
+   *  partner's callsign or live status changes — main.ts owns the "hidden
+   *  until launched" / "SIGNAL LOST only after we've heard from them once"
+   *  judgment calls; this method just renders whatever it's handed. `null`
+   *  hides the chip entirely. A callsign with status:null means SIGNAL LOST
+   *  (onPartnerStatus fired null) — the chip keeps showing their name so the
+   *  message reads as "them", not a generic drop. */
+  setPartner(info: { callsign: string; status: PartnerStatus | null } | null): void {
+    const chip = this.els['score-partner'];
+    if (!chip) return;
+    if (!info) {
+      chip.classList.add('partner-hidden');
+      return;
+    }
+    chip.classList.remove('partner-hidden');
+    if (!info.status) {
+      chip.textContent = `◆ ${info.callsign} · SIGNAL LOST`;
+      chip.classList.add('partner-lost');
+      chip.classList.remove('partner-dead');
+    } else {
+      const st = info.status;
+      chip.textContent = `◆ ${info.callsign} · W${st.wave} · ${st.score} · ${st.alive ? 'ALIVE' : 'K.I.A.'}`;
+      chip.classList.remove('partner-lost');
+      chip.classList.toggle('partner-dead', !st.alive);
+    }
   }
 
   private hitmarker(kill: boolean, headshot: boolean): void {

@@ -1,0 +1,542 @@
+/* ============================================================
+   PLAY WITH A FRIEND — friend-room lobby (src/ui/FriendPanel.ts).
+
+   This file also carries two small style blocks that visually belong to
+   OTHER components — the menu's "PLAY WITH A FRIEND" entry button (lives in
+   Menu.ts's DOM) and the Hud partner status chip (lives in Hud.ts's DOM).
+   Judgment call, same one topcats.css already made: this build's file scope
+   includes friendpanel.css but not menu.css/hud.css, so their new elements
+   are styled here instead, clearly sectioned below. index.html links this
+   file last, after topcats.css, so nothing here needs !important.
+   ============================================================ */
+
+.fp-overlay {
+  position: fixed;
+  inset: 0;
+  /* Same layer as tc-overlay/fr-overlay — all three are mutually exclusive
+     in practice, so sharing a z-index is safe. */
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s2);
+  background: rgba(6, 7, 4, 0.72);
+  backdrop-filter: blur(var(--panel-blur));
+  transition: opacity var(--t-med) var(--ease-out);
+  pointer-events: auto;
+}
+
+.fp-overlay.fp-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: min(92vw, 460px);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: var(--s3);
+  background: linear-gradient(180deg, rgba(11, 13, 9, 0.86), rgba(11, 13, 9, 0.94));
+  backdrop-filter: blur(calc(var(--panel-blur) * 2));
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+/* Instant swap (not a fade) — .fp-panel/.fp-interstitial trade places the
+   moment launch happens, no transition needed for a one-way hand-off. */
+.fp-panel.fp-panel-hidden {
+  display: none;
+}
+
+.fp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fp-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--c-text);
+}
+
+.fp-title svg {
+  width: 20px;
+  height: 20px;
+  color: var(--c-accent);
+  flex-shrink: 0;
+}
+
+.fp-close {
+  display: flex;
+  padding: var(--s05);
+  background: none;
+  border: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.fp-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.fp-close:hover {
+  color: var(--c-accent);
+}
+
+/* ---- view / block visibility (three distinct hidden layers: the overlay
+   itself fades via .fp-hidden above; a top-level view swap and a sub-block
+   swap within a view are both instant — see FriendPanel.ts's setView). ---- */
+.fp-view.fp-view-hidden,
+.fp-block.fp-block-hidden {
+  display: none;
+}
+
+.fp-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.fp-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.fp-hint {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  color: var(--c-muted);
+  text-align: center;
+}
+
+.fp-row {
+  display: flex;
+  gap: var(--s1);
+}
+
+/* Dark-input recipe, same as fieldreport.css's .fr-textarea / topcats.css's
+   .kia-input (amber focus halo) — redefined here since those files aren't
+   in this build's scope. Shared by the callsign and code inputs; .fp-code-input
+   adds the code-specific letterspacing/alignment on top. */
+.fp-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--s1) var(--s2);
+  font-family: var(--font-hud);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+  color: var(--c-text);
+  background: var(--c-surface-2);
+  border: 1px solid rgba(255, 176, 46, 0.15);
+  border-radius: var(--radius);
+  outline: none;
+  text-transform: uppercase;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+
+.fp-input:hover {
+  border-color: rgba(255, 176, 46, 0.25);
+}
+
+.fp-input:focus {
+  border: 1.5px solid var(--c-accent);
+  box-shadow: 0 0 0 3px rgba(255, 176, 46, 0.15);
+}
+
+.fp-input::placeholder {
+  color: var(--c-muted);
+  text-transform: none;
+}
+
+.fp-code-input {
+  text-align: center;
+  letter-spacing: 0.5em;
+  font-weight: 700;
+}
+
+/* ---- buttons: base + primary/ghost/ready variants (same recipe as
+   fieldreport.css's .fr-btn family, redefined here — see file header). ---- */
+.fp-btn {
+  padding: var(--s1) var(--s2);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    filter var(--t-fast) var(--ease-out),
+    opacity var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out);
+}
+
+.fp-btn-primary {
+  color: var(--c-bg);
+  background: var(--c-accent);
+  border: none;
+}
+
+.fp-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.fp-btn-ghost {
+  color: var(--c-accent);
+  background: transparent;
+  border: 1px solid rgba(255, 176, 46, 0.35);
+}
+
+.fp-btn-ghost:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  background: rgba(255, 176, 46, 0.08);
+}
+
+.fp-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+  filter: saturate(0.4);
+  transform: none;
+}
+
+.fp-create-btn {
+  width: 100%;
+  padding: var(--s2);
+  font-size: var(--fs-md);
+}
+
+.fp-deploy-btn {
+  width: 100%;
+}
+
+/* Ready toggle: outline ghost at rest, solid amber fill when armed — same
+   "amber when live" language as .weapon-pip.pip-active / .promo-chip.promo-affordable. */
+.fp-btn-ready {
+  width: 100%;
+  color: var(--c-accent);
+  background: transparent;
+  border: 1px solid rgba(255, 176, 46, 0.35);
+}
+
+.fp-btn-ready:hover {
+  border-color: var(--c-accent);
+  background: rgba(255, 176, 46, 0.08);
+}
+
+.fp-btn-ready.fp-ready-armed {
+  color: var(--c-bg);
+  background: var(--c-accent);
+  border: none;
+}
+
+.fp-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  color: var(--c-muted);
+}
+
+.fp-divider::before,
+.fp-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 176, 46, 0.15);
+}
+
+/* ---- loading / error state (same recipe as topcats.css's .tc-state). ---- */
+.fp-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s2);
+  font-family: var(--font-hud);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--c-muted);
+}
+
+.fp-state-loading {
+  animation: fp-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.fp-state-error {
+  color: var(--c-danger);
+}
+
+@keyframes fp-pulse {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-state-loading,
+  .fp-card-waiting .fp-card-callsign {
+    animation: none;
+  }
+}
+
+/* ---- room code ---- */
+.fp-code-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.fp-code-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  color: var(--c-muted);
+}
+
+/* Deliberate one-off above the type scale (matches hud.css's .death-title
+   72px precedent) — the code is the whole point of this screen: it has to
+   read from across a room. */
+.fp-code-value {
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--c-accent);
+  line-height: 1;
+}
+
+/* ---- self / partner cards ---- */
+.fp-cards {
+  display: flex;
+  gap: var(--s2);
+}
+
+.fp-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s05);
+  padding: var(--s2);
+  background: var(--c-surface-2);
+  border: 1px solid rgba(233, 230, 215, 0.12);
+  border-radius: var(--radius);
+}
+
+.fp-card-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.2em;
+  color: var(--c-muted);
+}
+
+.fp-card-callsign {
+  font-family: var(--font-hud);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fp-card-ready {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-muted);
+  min-height: 1em;
+}
+
+.fp-card-ready.fp-ready-armed {
+  color: var(--c-accent);
+  font-weight: 700;
+}
+
+.fp-card.fp-card-waiting .fp-card-callsign {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--c-muted);
+  animation: fp-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.fp-reason {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-muted);
+  text-align: center;
+  min-height: 1em;
+}
+
+/* Confirmation fade (COPY LINK) — same idiom as fieldreport.css's .fr-confirm. */
+.fp-confirm {
+  min-height: 1em;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-accent);
+  opacity: 0;
+}
+
+.fp-confirm.fp-confirm-err {
+  color: var(--c-danger);
+}
+
+.fp-confirm.fp-confirm-play {
+  animation: fp-confirm-fade var(--t-slow) var(--ease-out) forwards;
+}
+
+@keyframes fp-confirm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- guest interstitial: full-bleed "CLICK TO DEPLOY" gesture target.
+   A <button> (not a div) so Enter/Space/focus-visible work for free — see
+   FriendPanel.ts's file header on why the guest needs its own real click. ---- */
+.fp-interstitial {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  width: 100%;
+  height: 100%;
+  background: rgba(6, 7, 4, 0.88);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+}
+
+.fp-interstitial.fp-interstitial-hidden {
+  display: none;
+}
+
+.fp-interstitial:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -8px;
+}
+
+.fp-interstitial-text {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--c-accent);
+}
+
+.fp-interstitial-sub {
+  font-size: var(--fs-lg);
+  letter-spacing: 0.3em;
+  color: var(--c-text);
+  animation: fp-blink 900ms ease-in-out infinite alternate;
+}
+
+@keyframes fp-blink {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-interstitial-sub {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   Menu entry point — "PLAY WITH A FRIEND" button + BETA tag. Markup lives
+   in Menu.ts, appended into .menu-topcats-row next to the TOP CATS button;
+   styled here (see file header). Reuses topcats.css's .menu-topcats-btn
+   class as-is for the button itself (identical ghost-amber look, zero new
+   CSS needed for that part) — .menu-friend-btn only adds the gap between
+   the two buttons, and .beta-tag is the small amber pill.
+   ============================================================ */
+.menu-friend-btn {
+  margin-left: var(--s2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.beta-tag {
+  padding: 1px var(--s1);
+  font-family: var(--font-hud);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--c-bg);
+  background: var(--c-accent);
+  border-radius: var(--radius);
+  vertical-align: middle;
+}
+
+/* ============================================================
+   Hud partner status chip — markup lives in Hud.ts's #hud-score cluster,
+   right after .score-tuna; styled here (see file header). Inherits
+   #hud-score's text-shadow/text-align/positioning (text-shadow is a CSS
+   inherited property) — this only needs its own color/size/state rules.
+   ============================================================ */
+.score-partner {
+  margin-top: var(--s05);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--c-text);
+}
+
+.score-partner.partner-hidden {
+  display: none;
+}
+
+.score-partner.partner-dead {
+  color: var(--c-danger);
+}
+
+.score-partner.partner-lost {
+  color: var(--c-muted);
+  animation: fp-pulse 1.1s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score-partner.partner-lost {
+    animation: none;
+  }
+}
+
+/* Narrow viewports: the two side-by-side cards need ~380px to stay legible
+   with a 12-char callsign — stack them rather than let either clip. */
+@media (max-width: 480px) {
+  .fp-cards {
+    flex-direction: column;
+  }
+}

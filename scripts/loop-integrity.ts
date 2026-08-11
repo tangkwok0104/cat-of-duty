@@ -47,9 +47,16 @@ async function main(): Promise<void> {
    *  target's id+position, or null if no cat has a clear bearing (possible
    *  since the wave-9 corner clusters: a ring-fresh cat frozen beside corner
    *  cover can have all close-range bearings blocked or out of bounds). */
-  const aimAtCat = (dist: number, aimY: number): Promise<{ id: number; x: number; z: number } | null> =>
+  /** extraAimYs: additional heights that must ALSO be LoS-clear from the
+   *  same spot — a pseudo-cone check for spread weapons. Wave 11 caught the
+   *  need: a center-ray-clear 2.2m shotgun bearing beside the SW corner
+   *  crates clipped the cone's low edge, eating one pellet — and one pellet
+   *  is the whole one-pull margin (8×14=112 vs 100hp), so the kill assert
+   *  failed with placement and fire both "working". The low ray (0.25, at
+   *  crate-top height) is the discriminator. */
+  const aimAtCat = (dist: number, aimY: number, extraAimYs: number[] = []): Promise<{ id: number; x: number; z: number } | null> =>
     page.evaluate(
-      ([d, ay]) => {
+      ([d, ay, extras]) => {
         const g = window.__cod.getGame();
         const OFFSETS = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, Math.PI / 2, -Math.PI / 2, Math.PI];
         for (const cat of g.cats) {
@@ -60,6 +67,7 @@ async function main(): Promise<void> {
             const pz = cat.z + Math.cos(ang) * d!;
             if (Math.abs(px) > 18 || Math.abs(pz) > 18) continue;
             if (!window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ay!)) continue;
+            if (!extras!.every((ey) => window.__cod.lineOfSightToCat(px, 1.62, pz, cat.id, ey))) continue;
             const yaw = Math.atan2(-(cat.x - px), -(cat.z - pz));
             const pitch = Math.atan2(ay! - 1.62, d!);
             window.__cod.setPlayer(px, 0.9, pz, yaw, pitch);
@@ -68,7 +76,7 @@ async function main(): Promise<void> {
         }
         return null;
       },
-      [dist, aimY],
+      [dist, aimY, extraAimYs] as const,
     );
 
   /** aimAtCat, but when no cat is placeable, unfreeze briefly so the cats
@@ -77,15 +85,15 @@ async function main(): Promise<void> {
    *  returned as null for the caller to FAIL LOUDLY; steps must never fire
    *  from a stale position (the wave-9 shotgun flake: aimAtCat's null was
    *  discarded and the blast went somewhere irrelevant). */
-  const aimWithApproach = async (dist: number, aimY: number): Promise<{ id: number; x: number; z: number } | null> => {
+  const aimWithApproach = async (dist: number, aimY: number, extraAimYs: number[] = []): Promise<{ id: number; x: number; z: number } | null> => {
     for (let tries = 0; tries < 4; tries++) {
-      const aimed = await aimAtCat(dist, aimY);
+      const aimed = await aimAtCat(dist, aimY, extraAimYs);
       if (aimed) return aimed;
       await page.evaluate(() => window.__cod.setCatsFrozen(false));
       await page.waitForTimeout(1200);
       await page.evaluate(() => window.__cod.setCatsFrozen(true));
     }
-    return aimAtCat(dist, aimY);
+    return aimAtCat(dist, aimY, extraAimYs);
   };
 
   // 1. Lock pointer (arms the waves).
@@ -231,7 +239,20 @@ async function main(): Promise<void> {
     step('shotgun close-range one-pull kill', false, 'no live cat');
   } else {
     const kills0 = g.kills;
-    const aimed = await aimWithApproach(2.2, 0.44);
+    // Controlled range for the spread weapon: walk the ring-fresh target
+    // PAST the outer-ring cover band before placement. targetHp forensics
+    // (wave 11) nailed the mechanism: spawns walk inward, and ~1.2-2s of
+    // travel puts them exactly in the corner-crate band (±14-16), where
+    // random per-pellet spread clips crates 1-2 pellets' worth — and one
+    // pellet is the whole one-pull margin (8×14=112 vs 100hp; measured
+    // survivors at hp=2 and hp=16 on the same spot). 2.6s of approach
+    // crosses the band into open mid-field (a 1.2s beat delivered cats TO
+    // the crates — premise inverted). Height-ray cone proxies were tried
+    // and disproven first. This step tests the GUN, not the terrain.
+    await page.evaluate(() => window.__cod.setCatsFrozen(false));
+    await page.waitForTimeout(2600);
+    await page.evaluate(() => window.__cod.setCatsFrozen(true));
+    const aimed = await aimWithApproach(2.2, 0.44, [0.25, 0.8]);
     if (!aimed) {
       // Never fire from a stale position — attribute the placement failure.
       step('shotgun close-range one-pull kill', false, 'placement failed: no clear 2.2m bearing to any cat');
@@ -242,8 +263,14 @@ async function main(): Promise<void> {
       await page.mouse.up();
       await page.waitForTimeout(200);
       g = await game();
+      // Post-blast target hp discriminates any future residue: partial
+      // pellet loss leaves a low-hp survivor; a whole missed blast leaves 100.
+      const targetAfter = await page.evaluate(
+        (id) => window.__cod.getGame().cats.find((c) => c.id === id)?.hp ?? -1,
+        aimed.id,
+      );
       step('shotgun close-range one-pull kill', g.kills > kills0,
-        `kills ${kills0}→${g.kills}, ammo=${g.ammo}, target=(${aimed.x.toFixed(1)},${aimed.z.toFixed(1)})`);
+        `kills ${kills0}→${g.kills}, ammo=${g.ammo}, target=(${aimed.x.toFixed(1)},${aimed.z.toFixed(1)}), targetHp=${targetAfter}`);
     }
   }
 

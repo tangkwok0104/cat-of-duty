@@ -21,6 +21,9 @@ import { Upgrades } from './gameplay/Upgrades';
 import { Hud } from './ui/Hud';
 import { Menu } from './ui/Menu';
 import { configure as configureFieldReport } from './ui/FieldReport';
+import { configureFriendPanel } from './ui/FriendPanel';
+import { configureRooms } from './net/Rooms';
+import type { RoomHandle, PartnerStatus } from './net/Rooms';
 import { SoundBus } from './audio/SoundBus';
 import { buildGreyBoxRoom } from './levels/GreyBoxRoom';
 import { StatsOverlay } from './debug/StatsOverlay';
@@ -182,6 +185,73 @@ async function boot(): Promise<void> {
     }
   });
 
+  // Friend rooms (M9 P2) — identity: same localStorage keys the leaderboard
+  // uses (net/Leaderboard.ts's CLIENT_ID_KEY / callsign), duplicated rather
+  // than imported since src/net/** is frozen and that helper isn't exported.
+  // configureRooms's provider is read LIVE on every create/join call, so a
+  // callsign typed in FriendPanel's own callsign gate is picked up immediately.
+  let cachedClientId: string | null = null;
+  const ensureClientId = (): string => {
+    if (cachedClientId) return cachedClientId;
+    const fallback = (): string => `cod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      const existing = localStorage.getItem('cod-client-id');
+      if (existing) {
+        cachedClientId = existing;
+        return existing;
+      }
+      const fresh = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : fallback();
+      localStorage.setItem('cod-client-id', fresh);
+      cachedClientId = fresh;
+      return fresh;
+    } catch {
+      cachedClientId = cachedClientId ?? fallback(); // private mode — in-memory id for this page load
+      return cachedClientId;
+    }
+  };
+  configureRooms(() => ({
+    callsign: localStorage.getItem('cod-callsign') ?? '',
+    clientId: ensureClientId(),
+  }));
+
+  // Partner chip wiring: FriendPanel hands off the live RoomHandle the
+  // instant a friend run launches (see FriendPanel.ts's file header on why
+  // handoff happens exactly there). From that point on THIS closure owns
+  // onState/onPartnerStatus for the rest of the run — Rooms.ts's callbacks
+  // are single-slot setters, so re-registering here is what completes the
+  // handoff. partnerCallsign is set once and kept (never nulled back to
+  // unknown) so a later SIGNAL LOST can still say whose signal was lost;
+  // everReceivedStatus gates the chip so launch doesn't flash "SIGNAL LOST"
+  // for the sub-second before the first real status ping lands.
+  let roomHandle: RoomHandle | null = null;
+  let partnerCallsign: string | null = null;
+  let partnerStatus: PartnerStatus | null = null;
+  let everReceivedStatus = false;
+  const renderPartnerChip = (): void => {
+    hud.setPartner(partnerCallsign && everReceivedStatus ? { callsign: partnerCallsign, status: partnerStatus } : null);
+  };
+  configureFriendPanel({
+    lock: () => {
+      sound.unlock();
+      input.requestLock();
+    },
+    onRoomLaunched: (handle) => {
+      roomHandle = handle;
+      partnerCallsign = null;
+      partnerStatus = null;
+      everReceivedStatus = false;
+      handle.onState((s) => {
+        if (s.partner) partnerCallsign = s.partner.callsign;
+        renderPartnerChip();
+      });
+      handle.onPartnerStatus((st) => {
+        everReceivedStatus = true;
+        partnerStatus = st;
+        renderPartnerChip();
+      });
+    },
+  });
+
   // Main menu overlay: DEPLOY/RESUME + settings; shows whenever the pointer
   // is free (and the death card isn't up).
   const menu = new Menu(state, quality, {
@@ -210,6 +280,17 @@ async function boot(): Promise<void> {
     renderSys.render(alpha, state);
     input.completeFrame(performance.now()); // closes input→render latency
     hud.frame(state, dt, now);
+    // Friend-room status stream (M9 P2): sendStatus self-throttles to 1Hz
+    // internally (see Rooms.ts) and no-ops once the room isn't 'launched',
+    // so calling it every frame here is cheap and needs no restart-guard —
+    // it just keeps working across R-restarts since state.score/health
+    // reset in place rather than the loop itself restarting.
+    roomHandle?.sendStatus({
+      wave: state.score.wave,
+      score: state.score.score,
+      hp: Math.round(state.health.hp),
+      alive: !state.health.dead,
+    });
     sound.tick(state.health.hp / 100, state.health.dead);
     // First lock-in arms the first wave (also under the harness override).
     if (!wavesArmed && (input.locked || input.captureOverride)) {

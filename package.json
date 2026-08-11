@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
+    "@supabase/realtime-js": "^2.112.3",
     "howler": "^2.2.4",
     "n8ao": "^2.0.0",
     "postprocessing": "^6.39.3",

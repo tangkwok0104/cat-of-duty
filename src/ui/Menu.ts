@@ -3,6 +3,8 @@ import type { QualityControl } from '../core/Capabilities';
 import { preloadCritical } from '../core/Assets';
 import { openFieldReport } from './FieldReport';
 import { openTopCats } from './TopCats';
+import { openFriendPanel } from './FriendPanel';
+import { parseRoomFromUrl } from '../net/Rooms';
 
 const REPO_URL = 'https://github.com/tangkwok0104/cat-of-duty';
 
@@ -42,6 +44,11 @@ export class Menu {
     host.append(this.root);
     this.build();
     this.load();
+    // ?room=ABCD boot: open FriendPanel pre-filled and auto-joining (once a
+    // callsign exists — FriendPanel itself gates on that). Runs once, here,
+    // since this constructor only ever runs once at boot.
+    const roomCode = parseRoomFromUrl();
+    if (roomCode) openFriendPanel(roomCode);
   }
 
   private build(): void {
@@ -78,6 +85,9 @@ export class Menu {
           </div>
           <div class="menu-topcats-row">
             <button type="button" class="menu-topcats-btn" id="menu-topcats">TOP CATS ▸</button>
+            <button type="button" class="menu-topcats-btn menu-friend-btn" id="menu-friend">
+              PLAY WITH A FRIEND <span class="beta-tag">BETA</span>
+            </button>
           </div>
           <div class="menu-hint">WASD MOVE · SHIFT SPRINT · CTRL CROUCH · SPACE JUMP · 1-4 GUNS · R RELOAD</div>
           <div class="menu-footer">
@@ -96,6 +106,8 @@ export class Menu {
     fieldReportBtn?.addEventListener('click', () => openFieldReport());
     const topCatsBtn = this.root.querySelector('#menu-topcats');
     topCatsBtn?.addEventListener('click', () => openTopCats());
+    const friendBtn = this.root.querySelector('#menu-friend');
+    friendBtn?.addEventListener('click', () => openFriendPanel());
 
     const deployBtn = this.root.querySelector('#menu-deploy') as HTMLButtonElement | null;
     deployBtn?.addEventListener('click', () => {

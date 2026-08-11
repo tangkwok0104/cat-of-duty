@@ -13,7 +13,7 @@
 | M6 | Level art + environment pass | ⚠ combat space + props + 38×38 arena shipped; outer-ring corners still bare (see Deferred) |
 | M7 | Game loop: menus, waves, scoring, settings | ✅ complete + TUNA economy, special waves (wave 8) |
 | M8 | Polish + performance | ✅ gunfeel wave shipped (wave 7); budgets green |
-| M9 | **Multiplayer** (plan: `.tmp/plan-multiplayer.md`) | 🔨 P1 leaderboard ✅ shipped (wave 10) · P2 rooms + P3 co-op (pet-to-revive locked) + P4 co-op board queued |
+| M9 | **Multiplayer** (plan: `.tmp/plan-multiplayer.md`) | 🔨 P1 leaderboard ✅ (wave 10) · P2 rooms + parallel ops ✅ (wave 11) · P3 co-op sim (WebRTC, pet-to-revive) next · P4 co-op board queued |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
@@ -27,9 +27,14 @@ https://github.com/tangkwok0104/cat-of-duty** · branch `m0-scaffold` = `main`
 ×3 serialized, perf p95 9.4ms / 113 draws / tris 196.9k / heap Δ0 orbit).
 Wave 9 (2026-08-10) added the public-product layer (FIELD REPORT widget,
 legal pages, CSP headers, corner dressing, harness placement class-fix).
-Wave 10 (2026-08-11) shipped **M9 Phase 1: the live leaderboard** — TOP CATS
-panel + K.I.A. rank line, backed by the shared 67lab.website Supabase
-project at $0/mo. Next up: M9 P2 (rooms + lobby).
+Wave 10 (2026-08-11) shipped **M9 P1: the live leaderboard** (TOP CATS +
+K.I.A. rank line, shared 67lab.website Supabase backend, $0/mo). Wave 11
+(2026-08-12) shipped **M9 P2: friend rooms** — PLAY WITH A FRIEND · BETA,
+room codes + share links, lobby, and PARALLEL OPS (live partner chip while
+both run their own arena). Next: **M9 P3 — the real co-op sim** (WebRTC
+host-authoritative snapshots, remote cat-soldier avatar, wave scaling for
+2P, pet-to-revive). Day-one P3 spike: verify headless-Chromium WebRTC
+loopback ICE before building on it.
 
 **Publishing setup (2026-08-10):** history rewritten with `git-filter-repo` to
 strip superseded >3MB model blobs — all 26 commits kept, push payload 14MB
@@ -63,6 +68,10 @@ push `main`; only `main` exists on GitHub.
 - **Post one real score from your own machine** (wave 10) — the full pipeline
   is agent-proven, but the launch board is deliberately empty (test rows
   wiped); your first real run christens it. Check the rank line feels right.
+- **Open a friend room across two real devices** (wave 11) — laptop + phone
+  browser, or send the link to a friend: create → share link → both ready →
+  deploy → watch each other's partner chip. Agent QA used two headless
+  contexts on one machine; real-network feel is yours to judge.
 
 ### 3. DEFERRED (real, unblocked, nobody's building it)
 
@@ -70,6 +79,12 @@ push `main`; only `main` exists on GitHub.
 - Raster hygiene: menu keyart/poster PNGs → WebP (finalize harness advisory,
   not a failure). In-page feedback backend (webhook/DB) if GitHub-only proves
   too much friction for strangers.
+- **Gunfeel-pass design question (wave-11 forensics):** the shotgun's
+  one-pull-kill margin is exactly ONE pellet (8×14=112 vs 100hp), and blasts
+  beside cover measurably lose 1-2 random pellets. Options: damage 14→15
+  (two-pellet margin), count 8→9, or accept cover-eats-pellets as intended
+  gameplay (harness now controls for it). Needs Anson's feel call, not more
+  agent math.
 - Ragdolls, reload animation on the gun, pathfinding proper (steering is heuristic — good enough, see wave 8).
 - Iris Xe / low-end hardware never measured; all numbers are from the M5 Pro.
 - Special waves exist but every enemy is still a cat re-skin — research says a
@@ -89,6 +104,59 @@ push `main`; only `main` exists on GitHub.
 - Deploy: `vercel --prod --yes` from the project root, then verify 200 + screenshot.
 
 ---
+
+## Wave 11 (2026-08-12) — M9 Phase 2: friend rooms + parallel ops
+
+**Rooms with zero server state** (`src/net/Rooms.ts` + Supabase Realtime on
+the shared project): a room IS a channel (`cod-room-<CODE>`, 4-char
+no-lookalike alphabet) — presence is the roster, the room dies with the
+host's socket, nothing to GC, $0. **Transport-derived design** (measured
+live, 3 suites + instrumented run): presence gossip is eventually-consistent
+across Realtime cluster nodes (1-3s+; broadcasts land instantly) → presence
+carries IDENTITY ONLY (tracked once, joinedAt = eviction seniority) and all
+mutable state (ready) rides broadcasts with a catch-up re-send when a
+partner appears. Third-joiner race: deterministic self-ejection by seniority
+(both sides converge, no coordinator). Guest join: early-resolve on host
+sync + 4s not-found deadline.
+
+**Lobby UI** ("PLAY WITH A FRIEND · BETA", `src/ui/FriendPanel.ts`): create
+→ huge amber code + COPY LINK; `?room=CODE` links auto-join; YOU/PARTNER
+soldier cards with ready states; host-gated DEPLOY TOGETHER. **Pointer-lock
+honesty**: host's deploy click is the lock gesture (launch() fires onLaunch
+synchronously — same call stack); the guest gets a "PARTNER LINK
+ESTABLISHED — CLICK TO DEPLOY" interstitial whose click provides theirs.
+**Parallel ops** (the P2 playable payoff): both sides run their own solo sim
+while a HUD chip streams the partner live at 1Hz — "◆ CALLSIGN · W3 · 2,400
+· ALIVE", K.I.A. in red, SIGNAL LOST on presence drop. Solo score submits
+unchanged. Co-op sim itself is P3 (pet-to-revive locked).
+
+**Builder-caught core bug, fixed + proven**: `joinRoom()` on a dead code
+HUNG FOREVER — the guest's own track() synced a hostless roster, the old
+close('host-left') path ran pre-settle, and the not-found deadline then
+bailed on `closed` without rejecting. Fix: pre-settle roster reads never
+close (the deadline is the only pre-join judge) + close() now rejects a
+pending join. Proven: REJECTED 'not-found' at 4.7s (was: 20s+ never
+settled). Builder's 6s UI-side timeout kept as defense-in-depth.
+
+**Harness forensics (the shotgun-step saga, closed with numbers).** The
+wave-9 blind-fire fix held, but a residual ~1-in-4 fail survived it. Stage
+1: pseudo-cone height rays (0.25/0.44/0.8) — DISPROVEN within one battery
+(a triple-ray-clear bearing still lost pellets). Stage 2: new targetHp
+forensics nailed the mechanism — survivors at hp=2 and hp=16 on the same
+spot = exactly 7/8 and 6/8 pellets landing (×14 arithmetic exact): random
+per-pellet spread clips corner crates, and ring-fresh spawns WALK INTO the
+±14-16 crate band (a 1.2s approach beat delivered cats TO the crates —
+premise inverted; passing runs' cats had walked past it). Fix: 2.6s
+band-crossing approach beat. Validated 6/6 under caffeinate with every
+prediction landing: targets at ~(-8,14) mid-field, targetHp=-12 (full
+8-pellet 112) every run. Lesson banked; two batteries were also killed by
+laptop sleep — long batteries now run under `caffeinate -i`.
+
+Gates: tsc ×2 clean, build green, transport suite ALL PASS (contract-width
+asserts), builder two-context probe 11/11 (create/join/ready/launch/
+interstitial/chip/not-found/key-capture), csp-smoke CLEAN with wss added,
+loop **14/14 ×6 consecutive** (caffeinated, serialized), perf budgets pass
+(p95 9ms / draws 113 / heap Δ0). Privacy V1.2 shipped same deploy.
 
 ## Wave 10 (2026-08-11) — M9 Phase 1: the leaderboard, end to end
 
