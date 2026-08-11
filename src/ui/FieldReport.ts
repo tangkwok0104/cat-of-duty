@@ -162,8 +162,22 @@ class FieldReportModal {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) this.hide();
     });
+    // Keys typed inside the modal must never reach the game's window-level
+    // hotkeys (R restarts while dead, F would reopen this modal — the same
+    // hazard class the K.I.A. callsign input guards against). A bubble-stop
+    // on the overlay covers every focus target inside it; ESC is re-handled
+    // here because the stop also hides it from the document listener below.
+    overlay.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.hide();
+      }
+    });
     // Registered once (ensureBuilt runs a single time); gated on isOpen so
     // it's inert for the rest of the page's life until a report is open.
+    // Still needed despite the overlay handler: catches ESC when focus sits
+    // OUTSIDE the overlay (e.g. body-focused after a backdrop click).
     document.addEventListener('keydown', (e) => {
       if (!this.isOpen || e.key !== 'Escape') return;
       e.preventDefault();

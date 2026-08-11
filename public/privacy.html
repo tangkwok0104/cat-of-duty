@@ -84,14 +84,16 @@
 
     <div class="kicker">Field Manual — Section P</div>
     <h1>Privacy Policy</h1>
-    <div class="updated">LAST UPDATED: 2026-08-10 · V1.0</div>
+    <div class="updated">LAST UPDATED: 2026-08-11 · V1.1</div>
 
     <div class="card">
       <h2>The Short Version</h2>
       <p>Cat of Duty is a free browser game with no accounts, no sign-up, no ads,
-      no analytics, and no tracking. The game itself collects no personal data
-      and sends nothing you do in it anywhere. Your settings and best score are
-      stored only in your own browser.</p>
+      no analytics, and no tracking. Your settings and best score are stored
+      only in your own browser, and the game sends nothing anywhere — with one
+      opt-in exception: if you choose to post a score to the leaderboard, the
+      callsign and run stats you see on screen are sent to the board (details
+      below). Nothing is ever sent without you pressing the button.</p>
     </div>
 
     <div class="card">
@@ -129,6 +131,22 @@
       The report includes technical details shown to you before you send it
       (game version, wave reached, quality tier, browser user agent, viewport
       size) — review and edit freely before submitting.</p>
+    </div>
+
+    <div class="card">
+      <h2>Leaderboard (Opt-In)</h2>
+      <p>Posting a score is optional and manual — the POST SCORE button on the
+      mission-failed screen. When you press it, we store: your chosen callsign,
+      the run's score, wave, kills, accuracy and duration, and a random
+      per-browser id (used only to highlight your own rows). Callsigns and
+      scores are shown <strong>publicly</strong> on the in-game board, so don't
+      use your real name as a callsign. The board is hosted on
+      <a href="https://supabase.com/privacy" rel="noopener">Supabase</a>.
+      To rate-limit abuse, a salted hash of your IP address is kept for up to
+      two hours around a submission, then deleted; the IP itself is never
+      stored with your score. To remove a score, open a
+      <a href="https://github.com/tangkwok0104/cat-of-duty/issues" rel="noopener">GitHub issue</a>
+      naming the callsign and we'll delete it.</p>
     </div>
 
     <div class="card">

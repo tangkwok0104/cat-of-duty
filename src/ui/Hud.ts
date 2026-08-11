@@ -4,6 +4,7 @@ import { ARCHETYPES } from '../enemies/EnemyConfig';
 import { WEAPONS } from '../weapons/WeaponConfig';
 import { effectiveMaxHp } from '../player/Health';
 import { openFieldReport } from './FieldReport';
+import { submitScore, type LeaderboardRunStats } from '../net/Leaderboard';
 
 const REFRESH_MS = 100;
 // Minimap world→pixel: half-extent of the play area plus a small margin so
@@ -18,6 +19,14 @@ const STREAK_LABELS: Record<1 | 2 | 3, string> = {
   2: 'CLAW FRENZY',
   3: 'APEX PREDATOR',
 };
+
+// K.I.A. leaderboard submit: callsign persistence key (also read by
+// TopCats.ts to highlight the player's own row — kept in sync by name,
+// not by import, since the two files intentionally don't depend on
+// each other).
+const CALLSIGN_KEY = 'cod-callsign';
+const CALLSIGN_CHARSET = /[^A-Z0-9_-]/g;
+const CALLSIGN_MAX = 12;
 
 type PromoId = 'claws' | 'pockets' | 'lives';
 
@@ -64,6 +73,19 @@ export class Hud {
   // hotkey below doesn't need a state reference — Hud only ever learns
   // about death via the player:died/game:restart bus events.
   private isDead = false;
+  // K.I.A. leaderboard submit — same "learn from bus events, not a state
+  // reference" idiom as isDead above. getLeaderboardStats is injected once
+  // from main.ts (configureLeaderboard, same DI shape as FieldReport's
+  // module-level configure); pendingStats is the snapshot taken the moment
+  // player:died fires, so the submit payload can't drift even if something
+  // else mutates GameState.score afterward. submitGen guards against a
+  // slow in-flight request resolving after a restart/new-death already
+  // reset this block (see handleSubmit).
+  private getLeaderboardStats: (() => LeaderboardRunStats) | null = null;
+  private pendingStats: LeaderboardRunStats | null = null;
+  private submitting = false;
+  private submitted = false;
+  private submitGen = 0;
 
   constructor() {
     const root = document.getElementById('hud-root');
@@ -91,8 +113,14 @@ export class Hud {
       this.dmgFromZ = fromZ;
       this.dmgTtl = 1.2;
     });
-    bus.on('player:died', () => this.setDead(true));
-    bus.on('game:restart', () => this.setDead(false));
+    bus.on('player:died', () => {
+      this.setDead(true);
+      this.prepareSubmitBlock();
+    });
+    bus.on('game:restart', () => {
+      this.setDead(false);
+      this.resetSubmitBlock();
+    });
     bus.on('wave:started', ({ wave, special }) => {
       this.waveToast(wave, special);
       this.hideBreather();
@@ -114,6 +142,13 @@ export class Hud {
     // correct even in the rare case the player already hit ESC first.
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'KeyF' || !this.isDead) return;
+      // Defense in depth: the callsign input's own keydown handler already
+      // stops this event from ever reaching window while it's focused (see
+      // build()) — Input.ts registers its window listener bubble-phase
+      // (plain addEventListener, no capture), so that alone is airtight.
+      // This check costs nothing and still holds even if that
+      // stopPropagation is ever refactored away by accident.
+      if (document.activeElement === this.els['kia-callsign']) return;
       // Without this, the browser's default action still fires after our
       // handler moves focus to the modal's textarea (same synchronous
       // event) — the F itself lands as the report's first typed character.
@@ -314,15 +349,173 @@ export class Hud {
       '<div class="ds-row"><span>WAVE REACHED</span><span id="ds-wave">0</span></div>' +
       '<div class="ds-row"><span>ACCURACY</span><span id="ds-acc">0%</span></div>' +
       '</div>' +
+      '<div class="kia-submit kia-hidden" id="kia-submit">' +
+      '<div class="kia-submit-row" id="kia-submit-row">' +
+      '<input id="kia-callsign" class="kia-input" type="text" maxlength="12" ' +
+      'placeholder="CALLSIGN" autocomplete="off" spellcheck="false" />' +
+      '<button type="button" id="kia-post" class="kia-post-btn">POST SCORE</button>' +
+      '</div>' +
+      '<div class="kia-submit-status" id="kia-submit-status"></div>' +
+      '</div>' +
       '<div class="death-sub">PRESS R TO REDEPLOY</div>' +
       '<div class="death-sub death-sub-secondary" id="death-fieldreport">F — FIELD REPORT</div>';
-    for (const id of ['ds-score', 'ds-best', 'ds-kills', 'ds-wave', 'ds-acc']) {
+    for (const id of [
+      'ds-score', 'ds-best', 'ds-kills', 'ds-wave', 'ds-acc',
+      'kia-submit', 'kia-submit-row', 'kia-callsign', 'kia-post', 'kia-submit-status',
+    ]) {
       const el = death.querySelector(`#${id}`);
       if (el instanceof HTMLElement) this.els[id] = el;
     }
     // Also clickable (covers the rare case the player already tapped ESC
     // to free the cursor before reading the F hint).
     death.querySelector('#death-fieldreport')?.addEventListener('click', () => openFieldReport());
+    this.wireSubmitBlock();
+  }
+
+  /** Callsign input + POST SCORE button. Split out of build() only because
+   *  build() was already long — this always runs exactly once, right after
+   *  the death-screen markup above is created. */
+  private wireSubmitBlock(): void {
+    const callsignInput = this.els['kia-callsign'];
+    if (callsignInput instanceof HTMLInputElement) {
+      callsignInput.value = this.loadStoredCallsign();
+      callsignInput.addEventListener('keydown', (e) => {
+        // CRITICAL (K.I.A. key-capture hazard): Input.ts's R-restart
+        // handler and this file's own F-field-report listener above are
+        // both plain `window.addEventListener('keydown', ...)` — bubble
+        // phase, no capture (confirmed by reading Input.ts). Calling
+        // stopPropagation() here runs during the target phase, before the
+        // event ever reaches window, so it fully blocks both hotkeys from
+        // firing while this input is focused. preventDefault() is
+        // deliberately NOT called (except for Enter below) so normal
+        // typing — including the letters R and F — still lands in the
+        // field instead of being eaten.
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          void this.handleSubmit();
+        }
+      });
+      callsignInput.addEventListener('input', () => {
+        const cleaned = callsignInput.value.toUpperCase().replace(CALLSIGN_CHARSET, '').slice(0, CALLSIGN_MAX);
+        if (cleaned !== callsignInput.value) callsignInput.value = cleaned;
+        this.saveCallsign(cleaned);
+        this.updatePostButtonState();
+      });
+    }
+    const postBtn = this.els['kia-post'];
+    if (postBtn instanceof HTMLButtonElement) {
+      // Same hazard as the input, cheap to close off too: a keyboard user
+      // could Tab onto this button and press R without ever "typing".
+      postBtn.addEventListener('keydown', (e) => e.stopPropagation());
+      postBtn.addEventListener('click', () => void this.handleSubmit());
+    }
+    this.updatePostButtonState();
+  }
+
+  private loadStoredCallsign(): string {
+    try {
+      return localStorage.getItem(CALLSIGN_KEY) ?? '';
+    } catch {
+      return ''; // private mode
+    }
+  }
+
+  private saveCallsign(value: string): void {
+    try {
+      localStorage.setItem(CALLSIGN_KEY, value);
+    } catch {
+      /* private mode */
+    }
+  }
+
+  /** Injected once from main.ts — same DI shape as FieldReport's
+   *  module-level `configure`, adapted to Hud's instance shape (Hud
+   *  already takes a live GameState every frame via frame(), so this
+   *  mirrors that "caller supplies the state" contract rather than adding
+   *  a second, redundant way for this file to reach GameState). */
+  configureLeaderboard(getStats: () => LeaderboardRunStats): void {
+    this.getLeaderboardStats = getStats;
+  }
+
+  /** Runs once per death (called from the player:died listener above):
+   *  snapshots the run's numbers, decides whether the block shows at all
+   *  (score > 0 only), and resets it to the idle state so a fresh death
+   *  always starts clean even if a previous run's submit succeeded/failed. */
+  private prepareSubmitBlock(): void {
+    this.submitGen++;
+    this.submitting = false;
+    this.submitted = false;
+    this.pendingStats = this.getLeaderboardStats?.() ?? null;
+    const show = (this.pendingStats?.score ?? 0) > 0;
+    this.els['kia-submit']?.classList.toggle('kia-hidden', !show);
+    this.els['kia-submit-row']?.classList.remove('kia-row-done');
+    this.setSubmitStatus('', null);
+    const post = this.els['kia-post'];
+    if (post instanceof HTMLButtonElement) post.textContent = 'POST SCORE';
+    this.updatePostButtonState();
+  }
+
+  /** Restart: hide the block outright (the next player:died re-snapshots
+   *  and reveals it). The death screen itself is already hidden at this
+   *  point too — this is just hygiene so no stale RANK/BOARD UNREACHABLE
+   *  text is sitting in the DOM for the next death. Also bumps submitGen
+   *  so a still-in-flight request from the previous run can't land on
+   *  this one (see handleSubmit). */
+  private resetSubmitBlock(): void {
+    this.submitGen++;
+    this.pendingStats = null;
+    this.submitting = false;
+    this.submitted = false;
+    this.els['kia-submit']?.classList.add('kia-hidden');
+    this.els['kia-submit-row']?.classList.remove('kia-row-done');
+    this.setSubmitStatus('', null);
+  }
+
+  private updatePostButtonState(): void {
+    const post = this.els['kia-post'];
+    const input = this.els['kia-callsign'];
+    if (!(post instanceof HTMLButtonElement) || !(input instanceof HTMLInputElement)) return;
+    post.disabled = this.submitting || this.submitted || input.value.trim().length === 0;
+  }
+
+  private setSubmitStatus(text: string, kind: 'ok' | 'fail' | null): void {
+    const el = this.els['kia-submit-status'];
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('kia-status-success', kind === 'ok');
+    el.classList.toggle('kia-status-fail', kind === 'fail');
+  }
+
+  /** One submit per run: only reachable while a snapshot exists and this
+   *  generation hasn't already submitted. Never auto-retries — a failure
+   *  just re-enables the button for the player to try again themselves. */
+  private async handleSubmit(): Promise<void> {
+    const stats = this.pendingStats;
+    if (this.submitting || this.submitted || !stats) return;
+    const input = this.els['kia-callsign'];
+    const callsign = input instanceof HTMLInputElement ? input.value.trim() : '';
+    if (callsign.length === 0) return;
+
+    const gen = this.submitGen;
+    this.submitting = true;
+    this.updatePostButtonState();
+    const post = this.els['kia-post'];
+    if (post instanceof HTMLButtonElement) post.textContent = 'TRANSMITTING…';
+
+    const result = await submitScore({ callsign, ...stats });
+    if (gen !== this.submitGen) return; // superseded by a restart/new death mid-flight
+
+    this.submitting = false;
+    if (result.ok) {
+      this.submitted = true;
+      this.els['kia-submit-row']?.classList.add('kia-row-done');
+      this.setSubmitStatus(`RANK #${result.rankWeek} THIS WEEK · #${result.rankAll} ALL-TIME`, 'ok');
+    } else {
+      if (post instanceof HTMLButtonElement) post.textContent = 'POST SCORE';
+      this.setSubmitStatus('BOARD UNREACHABLE', 'fail');
+      this.updatePostButtonState();
+    }
   }
 
   /** Fill the death card the moment the run ends. */
@@ -484,6 +677,13 @@ export class Hud {
   private setDead(dead: boolean): void {
     this.isDead = dead;
     this.els['death-screen']?.classList.toggle('hidden-death', !dead);
+    // The K.I.A. submit block (and the field-report hint below it) need a
+    // free cursor to be clickable. Nothing else releases pointer lock on
+    // death — see FieldReport.show()'s identical guard; same reasoning
+    // applies here. Menu.update() still won't show itself over this screen
+    // even though `locked` just went false: it separately gates on
+    // state.health.dead, which the death screen owns while it's up.
+    if (dead && document.pointerLockElement) document.exitPointerLock();
   }
 
   /** Per rendered frame (cheap eases) + throttled text refresh. */

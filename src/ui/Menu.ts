@@ -2,6 +2,7 @@ import type { GameState, QualityTier } from '../core/GameState';
 import type { QualityControl } from '../core/Capabilities';
 import { preloadCritical } from '../core/Assets';
 import { openFieldReport } from './FieldReport';
+import { openTopCats } from './TopCats';
 
 const REPO_URL = 'https://github.com/tangkwok0104/cat-of-duty';
 
@@ -75,6 +76,9 @@ export class Menu {
               <span id="set-vol-v" class="menu-val"></span>
             </label>
           </div>
+          <div class="menu-topcats-row">
+            <button type="button" class="menu-topcats-btn" id="menu-topcats">TOP CATS ▸</button>
+          </div>
           <div class="menu-hint">WASD MOVE · SHIFT SPRINT · CTRL CROUCH · SPACE JUMP · 1-4 GUNS · R RELOAD</div>
           <div class="menu-footer">
             <button type="button" class="menu-footer-link" id="footer-fieldreport">FIELD REPORT</button>
@@ -90,6 +94,8 @@ export class Menu {
 
     const fieldReportBtn = this.root.querySelector('#footer-fieldreport');
     fieldReportBtn?.addEventListener('click', () => openFieldReport());
+    const topCatsBtn = this.root.querySelector('#menu-topcats');
+    topCatsBtn?.addEventListener('click', () => openTopCats());
 
     const deployBtn = this.root.querySelector('#menu-deploy') as HTMLButtonElement | null;
     deployBtn?.addEventListener('click', () => {

@@ -103,6 +103,20 @@ async function boot(): Promise<void> {
     ua: navigator.userAgent,
     viewport: `${window.innerWidth}x${window.innerHeight}`,
   }));
+  // Same idea for the K.I.A. leaderboard submit block (src/ui/Hud.ts).
+  // GameState has no run-duration field, so runStartedAt (below, set at
+  // the same two points GameState's own run lifecycle already turns over:
+  // first deploy, restart) stands in for one. accuracy mirrors
+  // fillDeathStats' ds-acc math exactly, except 0 (not '—') when no shots
+  // were fired — the API field is a plain number.
+  let runStartedAt = 0;
+  hud.configureLeaderboard(() => ({
+    score: state.score.score,
+    wave: state.score.wave,
+    kills: state.score.kills,
+    accuracy: state.score.shots > 0 ? Math.round((state.score.hits / state.score.shots) * 100) : 0,
+    duration_s: runStartedAt > 0 ? Math.round((performance.now() - runStartedAt) / 1000) : 0,
+  }));
   const sound = new SoundBus();
   canvas.addEventListener('click', () => sound.unlock()); // autoplay policy
   // Best score survives sessions.
@@ -114,6 +128,13 @@ async function boot(): Promise<void> {
   bus.on('player:died', () => {
     const s = state.score;
     hud.fillDeathStats(s.score, s.best, s.kills, s.wave, s.shots, s.hits);
+  });
+  // Run-duration clock for the leaderboard submit (see runStartedAt above):
+  // restarts turn over a new run the moment R is pressed on the death
+  // screen, same lifecycle point as the wavesArmed re-arm below covers for
+  // the very first deploy.
+  bus.on('game:restart', () => {
+    runStartedAt = performance.now();
   });
   // Hit-stop on kills: 40ms world-freeze, camera stays live. Headshots get
   // 70ms — headroom on the emphasis kill (research: 40-80ms band).
@@ -194,6 +215,7 @@ async function boot(): Promise<void> {
     if (!wavesArmed && (input.locked || input.captureOverride)) {
       wavesArmed = true;
       cats.startWaves();
+      runStartedAt = performance.now(); // leaderboard duration_s clock starts here
     }
     // Death drains colour; respawn restores it.
     const deathTarget = state.health.dead ? 1 : 0;

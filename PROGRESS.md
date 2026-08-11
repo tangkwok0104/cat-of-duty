@@ -13,6 +13,7 @@
 | M6 | Level art + environment pass | ⚠ combat space + props + 38×38 arena shipped; outer-ring corners still bare (see Deferred) |
 | M7 | Game loop: menus, waves, scoring, settings | ✅ complete + TUNA economy, special waves (wave 8) |
 | M8 | Polish + performance | ✅ gunfeel wave shipped (wave 7); budgets green |
+| M9 | **Multiplayer** (plan: `.tmp/plan-multiplayer.md`) | 🔨 P1 leaderboard ✅ shipped (wave 10) · P2 rooms + P3 co-op (pet-to-revive locked) + P4 co-op board queued |
 
 North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
@@ -24,9 +25,11 @@ North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 https://github.com/tangkwok0104/cat-of-duty** · branch `m0-scaffold` = `main`
 · working tree clean · all gates green (tsc ×2, build, loop-integrity 14/14
 ×3 serialized, perf p95 9.4ms / 113 draws / tris 196.9k / heap Δ0 orbit).
-Wave 9 (2026-08-10) added the public-product layer: FIELD REPORT feedback
-widget, privacy/terms pages, CSP + security headers, corner dressing, and a
-harness placement class-fix.
+Wave 9 (2026-08-10) added the public-product layer (FIELD REPORT widget,
+legal pages, CSP headers, corner dressing, harness placement class-fix).
+Wave 10 (2026-08-11) shipped **M9 Phase 1: the live leaderboard** — TOP CATS
+panel + K.I.A. rank line, backed by the shared 67lab.website Supabase
+project at $0/mo. Next up: M9 P2 (rooms + lobby).
 
 **Publishing setup (2026-08-10):** history rewritten with `git-filter-repo` to
 strip superseded >3MB model blobs — all 26 commits kept, push payload 14MB
@@ -44,7 +47,7 @@ push `main`; only `main` exists on GitHub.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| 1 | ~~Multiplayer~~ | ✅ **DECIDED (2026-08-11): A+B combined, rooms model** | Plan drafted at `.tmp/plan-multiplayer.md` (host-authoritative co-op over WebRTC, Supabase board+signaling, 4 shippable phases, $0/mo target) — awaiting Anson's sign-off on the plan's 4 sub-decisions before any build |
+| 1 | ~~Multiplayer~~ | ✅ **DECIDED + P1 SHIPPED (2026-08-11)** | A+B combined, rooms model, "1A 2B 3A 4A" — then 1 amended to **shared 67lab.website Supabase project, $0/mo** (Anson consolidates idle products onto one DB; new-project quote was $10/mo). P2 rooms next; P3 co-op ships **pet-to-revive** (2B) |
 | 2 | ~~Feedback widget + privacy/terms pages~~ | ✅ **BUILT (wave 9)** per the standing recommendation | Zero-backend: FIELD REPORT → prefilled public GitHub issue (+ copy fallback). If Anson wants an in-page submit instead, that needs a webhook/DB he provisions — say the word |
 | 3 | **TUNA economy balance** | keep / tune after his playtest / remove | **Tune after playtest** — needs his hands on it, not more agent guessing |
 | 4 | **Polish debt** | queue next session / leave | Leave unless he asks — see Deferred |
@@ -57,6 +60,9 @@ push `main`; only `main` exists on GitHub.
 - **Field Report end-to-end with a real cursor + GitHub account** — agent QA
   verified the composed URL and clipboard payload, but nobody has clicked
   SEND through to a filed issue. Also eyeball /privacy.html + /terms.html.
+- **Post one real score from your own machine** (wave 10) — the full pipeline
+  is agent-proven, but the launch board is deliberately empty (test rows
+  wiped); your first real run christens it. Check the rank line feels right.
 
 ### 3. DEFERRED (real, unblocked, nobody's building it)
 
@@ -83,6 +89,51 @@ push `main`; only `main` exists on GitHub.
 - Deploy: `vercel --prod --yes` from the project root, then verify 200 + screenshot.
 
 ---
+
+## Wave 10 (2026-08-11) — M9 Phase 1: the leaderboard, end to end
+
+**Backend ($0/mo, decided by Anson):** lives in the shared **67lab.website**
+Supabase project (`jjgarzufcuckokvsznsz`) — his united-DB consolidation
+strategy — as `cod_scores` + `cod_rate_events` with **RLS deny-all** (no anon
+policies; the host product's keys can't touch cod_ tables and vice versa).
+Sole door: edge function **cod-leaderboard** (verify_jwt off BY DESIGN — no
+accounts exist; the function is the gate): charset+profanity callsign check,
+plausibility ceilings (score/kills/duration vs wave), salted-IP-hash throttle
+10/h with 2h prune, generic 400 on any rejection. Week column defaults from
+the DB clock; reads filter via `cod_current_week()` — one clock, no drift.
+Source-tracked in-repo under `supabase/`. **Gates proven live**: curl matrix
+(valid 200+ranks, implausible 400, profanity 400, preflight 204) AND two
+browser probes rejected for genuinely impossible runs (sub-10s death; wave-2
+death at 11s) before an honest run passed — the ceilings bite.
+
+**Client:** `src/net/Leaderboard.ts` (fetch-only, no SDK, no API key — the
+endpoint is public+gated), TOP CATS menu panel (THIS WEEK / ALL TIME
+segmented, top-3 amber, own-callsign highlight, honest SIGNAL LOST/empty
+states, 60s cache), K.I.A. submit block (callsign input persists, one submit
+per run, rank line "RANK #N THIS WEEK · #N ALL-TIME" — the one-more-round
+hook). Empty config = board dark, zero requests (proven). Stranger callsigns
+render via textContent only (XSS). Builder proved the R/F key-capture guard
+with a real-death probe + negative control; orchestrator E2E proved the full
+live path: real kill → death → submit → 200 → rank line renders (rank
+arithmetic verified against the seeded row).
+
+**Class fix (wave-9 latent bug, builder-flagged):** FieldReport's textarea
+had the same R-bubbling hazard the callsign input guards against — typing
+"r" in a report while dead restarted the run under the modal. Fixed at the
+overlay level (bubble-stop + local ESC), probe-proven with "regression
+report r r restart" typed during death.
+
+**Consistency:** CSP connect-src += the Supabase origin (csp-smoke re-proven
+CLEAN); privacy V1.1 (opt-in leaderboard section — what's sent, public
+display warning, salted-IP rate limiting disclosure, deletion path) honoring
+V1.0's own "updated first" promise; terms V1.1 (fair play + wipe right).
+
+**Incidental find, surfaced to Anson:** VibeScan project has RLS DISABLED on
+5 vs_* tables (fully exposed). Not touched — needs its own session.
+
+Gates: tsc ×2 clean, build green, csp-smoke CLEAN, loop **14/14 ×3
+serialized** 0 console errors, perf p95 9.8ms / draws 113 / heap Δ0 — all
+budgets pass. Launch board wiped clean of test rows.
 
 ## Wave 9 (2026-08-10) — the public-product pass (autopilot hour)
 
