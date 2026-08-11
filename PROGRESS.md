@@ -44,7 +44,7 @@ push `main`; only `main` exists on GitHub.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| 1 | **Multiplayer** (he raised it) | A) leaderboard only (~days) · B) 2-player co-op, WebRTC (~weeks, real project) · C) park it | **A first** — most of the "others exist" feeling for a fraction of the cost |
+| 1 | ~~Multiplayer~~ | ✅ **DECIDED (2026-08-11): A+B combined, rooms model** | Plan drafted at `.tmp/plan-multiplayer.md` (host-authoritative co-op over WebRTC, Supabase board+signaling, 4 shippable phases, $0/mo target) — awaiting Anson's sign-off on the plan's 4 sub-decisions before any build |
 | 2 | ~~Feedback widget + privacy/terms pages~~ | ✅ **BUILT (wave 9)** per the standing recommendation | Zero-backend: FIELD REPORT → prefilled public GitHub issue (+ copy fallback). If Anson wants an in-page submit instead, that needs a webhook/DB he provisions — say the word |
 | 3 | **TUNA economy balance** | keep / tune after his playtest / remove | **Tune after playtest** — needs his hands on it, not more agent guessing |
 | 4 | **Polish debt** | queue next session / leave | Leave unless he asks — see Deferred |
