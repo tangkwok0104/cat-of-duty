@@ -19,22 +19,34 @@ North star: `CLAUDE.md`. Milestone commands: `/slice`, `/review`.
 
 ---
 
-## ▶ NEXT SESSION STARTS HERE (checkpoint 2026-08-10)
+## ▶ NEXT SESSION STARTS HERE (checkpoint 2026-08-12)
 
-**State:** live at https://cat-of-duty.vercel.app · **public source at
+**State:** live at https://cat-of-duty.vercel.app (second URL
+**cod.67lab.ai** attached, awaiting one Namecheap CNAME from Anson —
+`cod` → `b8f2f166291727d2.vercel-dns-016.com`) · **public source at
 https://github.com/tangkwok0104/cat-of-duty** · branch `m0-scaffold` = `main`
-· working tree clean · all gates green (tsc ×2, build, loop-integrity 14/14
-×3 serialized, perf p95 9.4ms / 113 draws / tris 196.9k / heap Δ0 orbit).
-Wave 9 (2026-08-10) added the public-product layer (FIELD REPORT widget,
-legal pages, CSP headers, corner dressing, harness placement class-fix).
-Wave 10 (2026-08-11) shipped **M9 P1: the live leaderboard** (TOP CATS +
-K.I.A. rank line, shared 67lab.website Supabase backend, $0/mo). Wave 11
-(2026-08-12) shipped **M9 P2: friend rooms** — PLAY WITH A FRIEND · BETA,
-room codes + share links, lobby, and PARALLEL OPS (live partner chip while
-both run their own arena). Next: **M9 P3 — the real co-op sim** (WebRTC
-host-authoritative snapshots, remote cat-soldier avatar, wave scaling for
-2P, pet-to-revive). Day-one P3 spike: verify headless-Chromium WebRTC
-loopback ICE before building on it.
+· all gates green (build, csp-smoke clean, backend live-fire verified).
+Waves 9-11 shipped the public layer, M9 P1 leaderboard, and M9 P2 friend
+rooms (see ledger). **2026-08-12 ops interlude:** (a) Anson + brother
+couldn't reach the site — root cause is the local ISP's DNS resolver
+(chain ends 123.136.8.228) refusing `vercel.app` AND `supabase.co`; Mac
+Wi-Fi DNS pinned to 1.1.1.1/8.8.8.8, custom domain is the fix for everyone
+else. (b) The shared Supabase project `jjgarzufcuckokvsznsz` was DELETED
+in Anson's account-wide consolidation onto **67lab-platform**
+(`rkogeqpqbimawiwtmdkp`, Sydney, per-product schemas). Game backend
+restored there: tables live at `web.cod_scores`/`web.cod_rate_events`
+(RLS deny-all verified live — anon INSERT → 42501), `public.cod_*` are
+security_invoker views, `cod_current_week()` recreated, edge function
+redeployed (CORS now includes cod.67lab.ai), client + CSP re-pointed,
+Anson's real score (ANSON · 6050 · w7) survived. Next: **M9 P3 — the real
+co-op sim** (Anson confirmed 2026-08-12 he expects SAME-ARENA co-op, COD
+style — that is exactly P3: WebRTC host-authoritative snapshots, remote
+cat-soldier avatar, wave scaling for 2P, pet-to-revive). **P3 spike DONE:**
+headless WebRTC DataChannel connects with STUN (`stun.l.google.com:19302`,
+default Playwright build, `checking>connected`); no-STUN loopback is
+firewall-blocked on this Mac — the coop harness and prod config both use
+STUN. Note: MCP Supabase auth is broken (sees an empty account) — use the
+CLI + Management API via the keychain token instead (see memory).
 
 **Publishing setup (2026-08-10):** history rewritten with `git-filter-repo` to
 strip superseded >3MB model blobs — all 26 commits kept, push payload 14MB
@@ -65,9 +77,14 @@ push `main`; only `main` exists on GitHub.
 - **Field Report end-to-end with a real cursor + GitHub account** — agent QA
   verified the composed URL and clipboard payload, but nobody has clicked
   SEND through to a filed issue. Also eyeball /privacy.html + /terms.html.
-- **Post one real score from your own machine** (wave 10) — the full pipeline
-  is agent-proven, but the launch board is deliberately empty (test rows
-  wiped); your first real run christens it. Check the rank line feels right.
+- ~~Post one real score~~ ✅ **DONE by Anson 2026-08-11** (ANSON · 6050 ·
+  wave 7 — survived the DB migration). Still worth checking the rank line
+  feels right on a second run.
+- **Add the Namecheap CNAME for cod.67lab.ai** (2026-08-12) — Namecheap →
+  67lab.ai → Advanced DNS → Add: type CNAME, host `cod`, value
+  `b8f2f166291727d2.vercel-dns-016.com`, TTL auto. Goes live + SSL by
+  itself within ~minutes; this is the URL that works on networks where
+  `vercel.app` is DNS-blocked (why you and your brother couldn't get in).
 - **Open a friend room across two real devices** (wave 11) — laptop + phone
   browser, or send the link to a friend: create → share link → both ready →
   deploy → watch each other's partner chip. Agent QA used two headless

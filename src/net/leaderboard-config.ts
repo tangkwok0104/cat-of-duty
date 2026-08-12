@@ -9,4 +9,4 @@
  *  an unreachable result with zero network calls, and the UI renders its
  *  real offline state instead of ever showing placeholder or sample data. */
 export const LEADERBOARD_BASE_URL =
-  'https://jjgarzufcuckokvsznsz.supabase.co/functions/v1/cod-leaderboard';
+  'https://rkogeqpqbimawiwtmdkp.supabase.co/functions/v1/cod-leaderboard';

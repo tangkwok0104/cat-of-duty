@@ -18,10 +18,10 @@
  *    partner chip's SIGNAL LOST state (presence leave event). */
 import { RealtimeClient, type RealtimeChannel } from '@supabase/realtime-js';
 
-const REALTIME_URL = 'wss://jjgarzufcuckokvsznsz.supabase.co/realtime/v1';
+const REALTIME_URL = 'wss://rkogeqpqbimawiwtmdkp.supabase.co/realtime/v1';
 // Publishable key — public by design (tables are RLS deny-all; channels are
 // public-broadcast and the room code is the only secret worth having here).
-const REALTIME_KEY = 'sb_publishable_cigX0b_jtK3R6IqRv6aEMA_7MIY03iZ';
+const REALTIME_KEY = 'sb_publishable_cjn2C1H7gp31JPA6I3vUMQ_HzwEQwmq';
 
 // No 0/O/1/I — codes get read aloud over voice chat and typed from phones.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

@@ -16,7 +16,7 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-const ALLOWED_ORIGINS = [/^https:\/\/cat-of-duty\.vercel\.app$/, /^http:\/\/127\.0\.0\.1:\d+$/];
+const ALLOWED_ORIGINS = [/^https:\/\/cat-of-duty\.vercel\.app$/, /^https:\/\/cod\.67lab\.ai$/, /^http:\/\/127\.0\.0\.1:\d+$/];
 // Callsigns are public on a board strangers see — keep the floor high.
 const BLOCKED = ["FUCK", "SHIT", "CUNT", "NIGG", "FAGG", "RAPE", "NAZI", "HITLER", "KKK", "PORN", "SEX", "DICK", "COCK", "PUSSY", "WHORE", "SLUT", "BITCH", "ANAL", "CUM", "JIZZ", "PEDO", "TWAT"];
 const RATE_LIMIT_PER_HOUR = 10;
